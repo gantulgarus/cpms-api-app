@@ -1,0 +1,425 @@
+[
+  {
+    "no": 1,
+    "group": "Газар шороо",
+    "name": "Газар шорооны ажил",
+    "unit": "м3",
+    "level": "block",
+    "plannedQty": 3129.84,
+    "estimated": false
+  },
+  {
+    "no": 2,
+    "group": "Угсралт",
+    "name": "суурь угсралтын ажил",
+    "unit": "м2",
+    "level": "block",
+    "plannedQty": 767.24,
+    "estimated": false
+  },
+  {
+    "no": 3,
+    "group": "Угсралт",
+    "name": "зоориос техникийн давхар угсралтын ажил",
+    "unit": "м2",
+    "level": "floor",
+    "plannedQty": 648.0,
+    "estimated": false
+  },
+  {
+    "no": 4,
+    "group": "Угсралт",
+    "name": "парпет угсралтын ажил",
+    "unit": "м2",
+    "level": "block",
+    "plannedQty": 225.68,
+    "estimated": false
+  },
+  {
+    "no": 5,
+    "group": "Дээвэр",
+    "name": "Дээврийн ажил",
+    "unit": "м2",
+    "level": "block",
+    "plannedQty": 648.0,
+    "estimated": false
+  },
+  {
+    "no": 6,
+    "group": "Өрлөг",
+    "name": "блокон өрлөг",
+    "unit": "м2",
+    "level": "floor",
+    "plannedQty": 648.0,
+    "estimated": true
+  },
+  {
+    "no": 7,
+    "group": "Өрлөг",
+    "name": "Тоосгон өрлөг-Үндсэн",
+    "unit": "м2",
+    "level": "floor",
+    "plannedQty": 648.0,
+    "estimated": true
+  },
+  {
+    "no": 8,
+    "group": "Өрлөг",
+    "name": "Тоосгон өрлөг-Шахт",
+    "unit": "м2",
+    "level": "floor",
+    "plannedQty": 648.0,
+    "estimated": true
+  },
+  {
+    "no": 9,
+    "group": "Цонх",
+    "name": "Цонх суулгалт-Энгийн",
+    "unit": "ш",
+    "level": "unit",
+    "plannedQty": 43.6,
+    "estimated": true
+  },
+  {
+    "no": 10,
+    "group": "Цонх",
+    "name": "Цонх суулгалт-Хаалгатай",
+    "unit": "ш",
+    "level": "unit",
+    "plannedQty": 43.6,
+    "estimated": true
+  },
+  {
+    "no": 11,
+    "group": "Фасад",
+    "name": "чулуун фасад",
+    "unit": "м2",
+    "level": "floor",
+    "plannedQty": 648.0,
+    "estimated": true
+  },
+  {
+    "no": 12,
+    "group": "Фасад",
+    "name": "метал фасад",
+    "unit": "м2",
+    "level": "floor",
+    "plannedQty": 648.0,
+    "estimated": true
+  },
+  {
+    "no": 13,
+    "group": "Фасад",
+    "name": "шилэн фасад",
+    "unit": "м2",
+    "level": "floor",
+    "plannedQty": 648.0,
+    "estimated": true
+  },
+  {
+    "no": 14,
+    "group": "цахилгаан",
+    "name": "Цахилгааны ажил",
+    "unit": "м2",
+    "level": "floor",
+    "plannedQty": 648.0,
+    "estimated": true
+  },
+  {
+    "no": 15,
+    "group": "сантехник",
+    "name": "Сантехникын ажил",
+    "unit": "м2",
+    "level": "floor",
+    "plannedQty": 648.0,
+    "estimated": true
+  },
+  {
+    "no": 16,
+    "group": "ХАС",
+    "name": "Агааржуулалтын ажил",
+    "unit": "м2",
+    "level": "floor",
+    "plannedQty": 648.0,
+    "estimated": true
+  },
+  {
+    "no": 17,
+    "group": "шал",
+    "name": "Хар шалны ажил",
+    "unit": "м2",
+    "level": "unit",
+    "plannedQty": 552.75,
+    "estimated": false
+  },
+  {
+    "no": 18,
+    "group": "шал",
+    "name": "паркетан шалны ажил",
+    "unit": "м2",
+    "level": "unit",
+    "plannedQty": 390.72,
+    "estimated": false
+  },
+  {
+    "no": 19,
+    "group": "чулуу",
+    "name": "Нийтийн эдэлбэрийн  чулууны ажил",
+    "unit": "м2",
+    "level": "floor",
+    "plannedQty": 87.29,
+    "estimated": false
+  },
+  {
+    "no": 20,
+    "group": "чулуу",
+    "name": "Шатны хонгилын чулууны ажил",
+    "unit": "м2",
+    "level": "floor",
+    "plannedQty": 16.95,
+    "estimated": false
+  },
+  {
+    "no": 21,
+    "group": "чулуу",
+    "name": "Тагтны босгоны чулууны ажил",
+    "unit": "м2",
+    "level": "unit",
+    "plannedQty": 3.07,
+    "estimated": false
+  },
+  {
+    "no": 22,
+    "group": "чулуу",
+    "name": "Цонхны тавцангийн чулууны ажил",
+    "unit": "м2",
+    "level": "unit",
+    "plannedQty": 2.24,
+    "estimated": false
+  },
+  {
+    "no": 23,
+    "group": "гипсэн хана",
+    "name": "гипсэн хана угсралтын ажил",
+    "unit": "м2",
+    "level": "floor",
+    "plannedQty": 648.0,
+    "estimated": true
+  },
+  {
+    "no": 24,
+    "group": "Засал",
+    "name": "Шавардлага-Бетон",
+    "unit": "м2",
+    "level": "unit",
+    "plannedQty": 43.6,
+    "estimated": true
+  },
+  {
+    "no": 25,
+    "group": "Засал",
+    "name": "Шавардлага-Блок",
+    "unit": "м2",
+    "level": "unit",
+    "plannedQty": 43.6,
+    "estimated": true
+  },
+  {
+    "no": 26,
+    "group": "Засал",
+    "name": "Шавардлага-Тоосго",
+    "unit": "м2",
+    "level": "unit",
+    "plannedQty": 43.6,
+    "estimated": true
+  },
+  {
+    "no": 27,
+    "group": "Засал",
+    "name": "хананы замаска",
+    "unit": "м2",
+    "level": "unit",
+    "plannedQty": 43.6,
+    "estimated": true
+  },
+  {
+    "no": 28,
+    "group": "Засал",
+    "name": "таазны замаска",
+    "unit": "м2",
+    "level": "unit",
+    "plannedQty": 596.31,
+    "estimated": false
+  },
+  {
+    "no": 29,
+    "group": "Засал",
+    "name": "хананы эмульс",
+    "unit": "м2",
+    "level": "unit",
+    "plannedQty": 43.6,
+    "estimated": true
+  },
+  {
+    "no": 30,
+    "group": "Засал",
+    "name": "таазны эмульс",
+    "unit": "м2",
+    "level": "unit",
+    "plannedQty": 596.31,
+    "estimated": false
+  },
+  {
+    "no": 31,
+    "group": "Засал",
+    "name": "Пилта-Ариун цэврийн өрөө шал",
+    "unit": "м2",
+    "level": "unit",
+    "plannedQty": 41.68,
+    "estimated": false
+  },
+  {
+    "no": 32,
+    "group": "Засал",
+    "name": "Пилта-Үүд",
+    "unit": "м2",
+    "level": "unit",
+    "plannedQty": 26.21,
+    "estimated": false
+  },
+  {
+    "no": 33,
+    "group": "Засал",
+    "name": "Пилта-Тагт",
+    "unit": "м2",
+    "level": "unit",
+    "plannedQty": 29.33,
+    "estimated": false
+  },
+  {
+    "no": 34,
+    "group": "Засал",
+    "name": "Пилта-Нийтийн эдэлбэр",
+    "unit": "м2",
+    "level": "floor",
+    "plannedQty": 73.26,
+    "estimated": false
+  },
+  {
+    "no": 35,
+    "group": "Засал",
+    "name": "Пилта-Ариун цэврийн өрөө хана",
+    "unit": "м2",
+    "level": "unit",
+    "plannedQty": 43.6,
+    "estimated": true
+  },
+  {
+    "no": 36,
+    "group": "Засал",
+    "name": "обой наах ажил",
+    "unit": "м2",
+    "level": "unit",
+    "plannedQty": 43.6,
+    "estimated": true
+  },
+  {
+    "no": 37,
+    "group": "Засал",
+    "name": "ханын хавтан наах ажил",
+    "unit": "м2",
+    "level": "unit",
+    "plannedQty": 43.6,
+    "estimated": true
+  },
+  {
+    "no": 38,
+    "group": "хаалга",
+    "name": "Айлийн гадна төмөр хаалга",
+    "unit": "ш",
+    "level": "unit",
+    "plannedQty": 43.6,
+    "estimated": true
+  },
+  {
+    "no": 39,
+    "group": "хаалга",
+    "name": "Гадна металл шилэн хаалга",
+    "unit": "ш",
+    "level": "block",
+    "plannedQty": 650.0,
+    "estimated": true
+  },
+  {
+    "no": 40,
+    "group": "хаалга",
+    "name": "Шатны хонгилын галын хаалга",
+    "unit": "ш",
+    "level": "floor",
+    "plannedQty": 648.0,
+    "estimated": true
+  },
+  {
+    "no": 41,
+    "group": "хаалга",
+    "name": "Гадна металл хаалга",
+    "unit": "ш",
+    "level": "block",
+    "plannedQty": 650.0,
+    "estimated": true
+  },
+  {
+    "no": 42,
+    "group": "хаалга",
+    "name": "Грашийн автомат хаалга",
+    "unit": "ш",
+    "level": "block",
+    "plannedQty": 650.0,
+    "estimated": true
+  },
+  {
+    "no": 43,
+    "group": "хаалга",
+    "name": "Айлын дотор модон хаалга",
+    "unit": "ш",
+    "level": "unit",
+    "plannedQty": 43.6,
+    "estimated": true
+  },
+  {
+    "no": 44,
+    "group": "Гадна ажил",
+    "name": "Довжооны ажил",
+    "unit": "м2",
+    "level": "block",
+    "plannedQty": 650.0,
+    "estimated": true
+  },
+  {
+    "no": 45,
+    "group": "Гадна ажил",
+    "name": "Пандусны ажил",
+    "unit": "м2",
+    "level": "block",
+    "plannedQty": 650.0,
+    "estimated": true
+  },
+  {
+    "no": 46,
+    "group": "Гадна ажил",
+    "name": "хаявч цутгах ажил",
+    "unit": "м2",
+    "level": "block",
+    "plannedQty": 650.0,
+    "estimated": true
+  },
+  {
+    "no": 47,
+    "group": "Гадна ажил",
+    "name": "Тохижилтын ажил",
+    "unit": "м2",
+    "level": "block",
+    "plannedQty": 650.0,
+    "estimated": true
+  }
+]
