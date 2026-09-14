@@ -18,6 +18,12 @@ class IssueResource extends JsonResource
                 'workItem',
                 fn () => $this->workItem?->relationLoaded('location') ? $this->workItem->location?->path : null
             ),
+            // Байршлын зам нь "3 давхар / 3А" гэж эхэлдэг — аль БАРИЛГА
+            // гэдгийг агуулдаггүй. 75 барилгын жагсаалтад тэр нь хангалтгүй.
+            'blockName' => $this->whenLoaded(
+                'workItem',
+                fn () => $this->workItem?->relationLoaded('block') ? $this->workItem->block?->name : null
+            ),
             'category' => $this->category,
             'categoryLabel' => Issue::CATEGORY_LABELS[$this->category] ?? $this->category,
             'severity' => $this->severity,

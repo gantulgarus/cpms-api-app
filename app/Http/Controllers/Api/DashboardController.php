@@ -74,6 +74,43 @@ class DashboardController extends Controller
             // хоёуланг нь буцаана, дэлгэц дээр ялгаж харуулна.
             ->selectRaw('sum(wi.reported_qty) as reported_qty')
             ->selectRaw('sum(wi.accepted_qty) as accepted_qty')
+            /*
+             * АЖЛЫН ТОО.
+             *
+             * ЯАГААД ХЭМЖЭЭ БИШ ВЭ: тоо хэмжээг нэмэх нь м², м³, ширхгийг
+             * нийлүүлнэ гэсэн үг — «306,970 эхлээгүй» гэсэн тоо ЮУ 306,970
+             * болохыг хэлж чадахгүй. Гүйцэтгэлийн акт дээр бид үүнийг зориуд
+             * зайлсхийж нэгж тус бүрээр дүн гаргадаг; самбар дээр мөн адил
+             * байх ёстой.
+             *
+             * Ажлын мөрийн тоо нь нэгжгүй: 3,290 ажлаас 358 нь дууссан гэдэг
+             * нь шалгаж болохуйц, ойлгомжтой. Сул тал нь том, жижиг ажил
+             * ижил жинтэй — гэхдээ худал тооноос үнэн бүдүүн тоо дээр.
+             *
+             * `status` нь аль хэдийн ГУРВАН харилцан үл огтлолцох бүлэгтэй
+             * (completed / in_progress / not_started) тул нийлбэр нь үргэлж
+             * нийт тоотой тэнцэнэ.
+             */
+            ->selectRaw('count(*) as total_items')
+            ->selectRaw("sum(case when wi.status = 'completed' then 1 else 0 end) as completed_items")
+            ->selectRaw("sum(case when wi.status = 'in_progress' then 1 else 0 end) as in_progress_items")
+            /*
+             * Ажил бүрийн ӨӨРИЙН хувийн НИЙЛБЭР.
+             *
+             * Хувь нь энэ нийлбэрийг ажлын тоонд хуваасан дундаж — өөрөөр
+             * хэлбэл мөр бүр ижил жинтэй, нэгж нь хоорондоо хамаагүй. Дутуу
+             * хийгдсэн ажил хагас оноо авна: зөвхөн бүрэн дууссаныг тоолбол
+             * 44% нь эхэлсэн төсөл 3% гэж харагдана.
+             *
+             * `least()` нь SQLite-д байхгүй тул CASE-ээр бичив.
+             */
+            ->selectRaw(
+                'sum(case
+                    when wi.planned_qty <= 0 then 0
+                    when wi.accepted_qty >= wi.planned_qty then 1.0
+                    else wi.accepted_qty / wi.planned_qty
+                end) as progress_sum'
+            )
             ->selectRaw("sum(case when wi.review_state = 'pending' then 1 else 0 end) as pending")
             ->selectRaw(
                 "sum(case when wi.status <> 'completed' and wi.planned_end_date < ? then 1 else 0 end) as overdue",
@@ -86,18 +123,45 @@ class DashboardController extends Controller
         $reported = $rows->sum(fn ($r) => (float) $r->reported_qty);
         $accepted = $rows->sum(fn ($r) => (float) $r->accepted_qty);
 
+        $totalItems = (int) $rows->sum(fn ($r) => (int) $r->total_items);
+        $completedItems = (int) $rows->sum(fn ($r) => (int) $r->completed_items);
+        $inProgressItems = (int) $rows->sum(fn ($r) => (int) $r->in_progress_items);
+        $progressSum = (float) $rows->sum(fn ($r) => (float) $r->progress_sum);
+
         return response()->json([
             'data' => [
-                'percentage' => $planned > 0 ? (int) round($accepted / $planned * 100) : 0,
+                /*
+                 * Хувь нь АЖЛЫН МӨРҮҮДИЙН ДУНДАЖ.
+                 *
+                 * Урьд нь тоо хэмжээний нийлбэрээр бодогддог байв — тэр нь
+                 * м², м³, ширхгийг нийлүүлдэг тул ширхгээр хэмжигддэг ажил
+                 * руу татагдана. Дундаж нь мөр бүрийг ижил жинтэй болгоно.
+                 */
+                'percentage' => $totalItems > 0
+                    ? (int) round($progressSum / $totalItems * 100)
+                    : 0,
+                'totalItems' => $totalItems,
+                'completedItems' => $completedItems,
+                'inProgressItems' => $inProgressItems,
+                'notStartedItems' => max($totalItems - $completedItems - $inProgressItems, 0),
+                // Тоо хэмжээ нь ХЭВЭЭР буцна: блокийн дэлгэрэнгүй, акт зэрэгт
+                // хэрэгтэй. Зөвхөн самбарын толгойн хувь нь өөрчлөгдөв.
                 'plannedQty' => round($planned, 3),
                 'reportedQty' => round($reported, 3),
                 'acceptedQty' => round($accepted, 3),
                 'blocks' => $rows->map(fn ($r) => [
                     'id' => $r->id,
                     'name' => $r->name,
-                    'percentage' => (float) $r->planned_qty > 0
-                        ? (int) round((float) $r->accepted_qty / (float) $r->planned_qty * 100)
+                    'percentage' => (int) $r->total_items > 0
+                        ? (int) round((float) $r->progress_sum / (int) $r->total_items * 100)
                         : 0,
+                    'totalItems' => (int) $r->total_items,
+                    'completedItems' => (int) $r->completed_items,
+                    'inProgressItems' => (int) $r->in_progress_items,
+                    'notStartedItems' => max(
+                        (int) $r->total_items - (int) $r->completed_items - (int) $r->in_progress_items,
+                        0
+                    ),
                     'plannedQty' => round((float) $r->planned_qty, 3),
                     'reportedQty' => round((float) $r->reported_qty, 3),
                     'acceptedQty' => round((float) $r->accepted_qty, 3),

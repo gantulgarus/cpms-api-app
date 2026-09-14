@@ -81,6 +81,9 @@ class AuthController extends Controller
                 'name' => $user->name,
                 'email' => $user->email,
                 'role' => $user->role,
+                // Үүргийн монгол нэр — дэлгэц шошгыг давхардуулж бичих
+                // шаардлагагүй, нэг эх сурвалж (`User::ROLES`) байна.
+                'roleLabel' => User::ROLES[$user->role] ?? $user->role,
                 'contractorId' => $user->contractor_id,
                 'scopeBlockIds' => $user->scope_block_ids ?? [],
                 // Эрхийг СЕРВЕР шийднэ. Дэлгэц үүргийн жагсаалтыг давхардуулж
@@ -114,6 +117,9 @@ class AuthController extends Controller
                     'id' => $user->id,
                     'name' => $user->name,
                     'role' => $user->role,
+                // Үүргийн монгол нэр — дэлгэц шошгыг давхардуулж бичих
+                // шаардлагагүй, нэг эх сурвалж (`User::ROLES`) байна.
+                'roleLabel' => User::ROLES[$user->role] ?? $user->role,
                 ],
             ],
         ]);

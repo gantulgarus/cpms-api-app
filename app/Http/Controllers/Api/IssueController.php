@@ -26,15 +26,25 @@ class IssueController extends Controller
 {
     public function __construct(private readonly WorkScope $scope) {}
 
-    /** GET /projects/{project}/issues — төслийн бүх асуудал. */
+    /**
+     * GET /projects/{project}/issues — төслийн бүх асуудал.
+     *
+     * Шүүлтүүр: status, category, severity, blockId.
+     *
+     * ЯАГААД БАРИЛГААР ШҮҮНЭ: «материал дутсан» гэсэн 40 бүртгэл нэг барилга
+     * дээр овоорсон бол ханган нийлүүлэлтийн асуудал биш, тэр объектын
+     * логистикийн асуудал. Ялгаж харахгүй бол хоёулаа ижил харагдана.
+     */
     public function index(Request $request, Project $project): AnonymousResourceCollection
     {
         $query = Issue::query()
-            ->with(['workItem.location', 'reportedBy'])
-            ->whereIn('work_item_id', $this->visibleWorkItems($request, $project))
+            ->with(['workItem.location', 'workItem.block', 'reportedBy'])
+            ->whereIn('work_item_id', $this->visibleWorkItems($request, $project, $request->query('blockId')))
             ->when($request->query('status'), fn ($q, $v) => $q->where('status', $v))
             ->when($request->query('category'), fn ($q, $v) => $q->where('category', $v))
             ->when($request->query('severity'), fn ($q, $v) => $q->where('severity', $v))
+            // Нээлттэй нь эхэнд — шийдэгдсэн бүртгэл түүх, нээлттэй нь ажил.
+            ->orderByRaw("case when status = 'open' then 0 else 1 end")
             ->latest('created_at');
 
         return IssueResource::collection($query->get());
@@ -92,10 +102,13 @@ class IssueController extends Controller
     }
 
     /** Хэрэглэгчийн харах эрхтэй ажлын id-ууд — гүйцэтгэгч бусдын асуудлыг харахгүй. */
-    private function visibleWorkItems(Request $request, Project $project)
+    private function visibleWorkItems(Request $request, Project $project, ?string $blockId = null)
     {
         $query = WorkItem::query()
             ->whereIn('block_id', $project->blocks()->select('id'))
+            // Блокийн шүүлтийг ЭНД тавина — төслийн хүрээнд үлдэх тул өөр
+            // төслийн блокийн id дамжуулж өгөгдөл гаргаж авах боломжгүй.
+            ->when($blockId, fn ($q, $v) => $q->where('block_id', $v))
             ->select('id');
 
         return $this->scope->workItems($query, $request->user());

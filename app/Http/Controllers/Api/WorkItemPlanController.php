@@ -6,12 +6,15 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\WorkItemResource;
 use App\Models\Block;
 use App\Models\DesignItem;
+use App\Models\Issue;
 use App\Models\WorkItem;
 use App\Models\WorkType;
 use App\Services\TaktSchedule;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 /**
  * Төлөвлөгөөт тоо хэмжээ ба хугацаа засах.
@@ -404,6 +407,74 @@ class WorkItemPlanController extends Controller
                 'updated' => $updated,
                 'frozen' => $frozen,
             ],
+        ]);
+    }
+
+    /**
+     * POST /work-items/{workItem}/extend
+     *
+     * Хугацаа хэтэрсэн ажлын дуусах огноог сунгана.
+     *
+     * ЯАГААД ШАЛТГААН ЗААВАЛ ВЭ: огноог чимээгүй хойшлуулж болдог бол
+     * «хугацаа хэтэрсэн» гэсэн тоо утгагүй болно — хэн ч хэзээ ч хоцрохгүй.
+     * Шалтгаан нь мөн статистик болж хуримтлагдана: «17 ажил хоцорсон, түүний
+     * 12 нь материал дутсанаас» гэдэг нь шийдвэр гаргуулдаг, «17 хоцорсон»
+     * гэдэг нь гаргуулдаггүй.
+     *
+     * Шалтгааныг АСУУДЛЫН бүртгэлд хадгална — тусдаа хүснэгт үүсгэх
+     * шаардлагагүй бөгөөд хоцролтын статистик нэг дороос гарна.
+     */
+    public function extend(Request $request, WorkItem $workItem): JsonResponse
+    {
+        $this->authorizeEdit($request);
+
+        $validated = $request->validate([
+            'plannedEndDate' => ['required', 'date'],
+            'category' => ['required', Rule::in(Issue::CATEGORIES)],
+            'reason' => ['required', 'string', 'max:2000'],
+        ], [
+            'plannedEndDate.required' => 'Шинэ дуусах огноог сонгоно уу.',
+            'category.required' => 'Саатлын шалтгааныг сонгоно уу.',
+            'reason.required' => 'Тайлбар бичнэ үү.',
+        ]);
+
+        $current = $workItem->planned_end_date;
+        $next = Carbon::parse($validated['plannedEndDate'])->startOfDay();
+
+        // Хойшлуулах нь сунгах — огноог УРАГШ татах нь өөр үйлдэл бөгөөд
+        // хоцролтыг хиймлээр үүсгэнэ.
+        abort_if(
+            $current && $next->lte($current),
+            422,
+            sprintf(
+                'Шинэ огноо одоогийнхоос (%s) хойш байх ёстой.',
+                $current?->toDateString() ?? '—'
+            )
+        );
+
+        DB::transaction(function () use ($workItem, $next, $validated, $request, $current) {
+            $workItem->update(['planned_end_date' => $next->toDateString()]);
+
+            $workItem->issues()->create([
+                'reported_by_id' => $request->user()?->id,
+                'category' => $validated['category'],
+                'severity' => 'medium',
+                'status' => 'open',
+                // Хуучин огноог тайлбарт үлдээнэ — хэдэн хоногоор сунгасныг
+                // хожим тоолох боломжтой байх ёстой.
+                'description' => sprintf(
+                    'Хугацаа сунгав: %s → %s. %s',
+                    $current?->toDateString() ?? '—',
+                    $next->toDateString(),
+                    $validated['reason'],
+                ),
+            ]);
+        });
+
+        return response()->json([
+            'data' => new WorkItemResource(
+                $workItem->refresh()->load(['location', 'workType.group', 'contractor'])
+            ),
         ]);
     }
 

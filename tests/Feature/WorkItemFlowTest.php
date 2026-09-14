@@ -380,6 +380,91 @@ class WorkItemFlowTest extends TestCase
             ->assertCreated();
     }
 
+    // -- Хугацаа сунгах --------------------------------------------------
+
+    /**
+     * Хугацаа сунгахад ШАЛТГААН заавал.
+     *
+     * Огноог чимээгүй хойшлуулж болдог бол «хугацаа хэтэрсэн» гэсэн тоо
+     * утгагүй болно — хэн ч хэзээ ч хоцрохгүй.
+     */
+    public function test_extending_a_deadline_requires_a_reason(): void
+    {
+        $item = $this->workItemWithQuantity();
+        $item->update(['planned_end_date' => now()->subDays(5)->toDateString()]);
+
+        $this->actingAs($this->engineer, 'sanctum')
+            ->postJson("/api/v1/work-items/{$item->id}/extend", [
+                'plannedEndDate' => now()->addDays(7)->toDateString(),
+            ])
+            ->assertStatus(422);
+
+        $this->asInspector()
+            ->postJson("/api/v1/work-items/{$item->id}/extend", [
+                'plannedEndDate' => now()->addDays(7)->toDateString(),
+                'category' => 'weather',
+            ])
+            ->assertStatus(422)
+            ->assertJsonValidationErrorFor('reason');
+    }
+
+    public function test_extending_records_the_reason_as_an_issue(): void
+    {
+        $item = $this->workItemWithQuantity();
+        $old = now()->subDays(5)->toDateString();
+        $item->update(['planned_end_date' => $old]);
+
+        $new = now()->addDays(10)->toDateString();
+
+        $this->asInspector()
+            ->postJson("/api/v1/work-items/{$item->id}/extend", [
+                'plannedEndDate' => $new,
+                'category' => 'material_shortage',
+                'reason' => 'Цонхны хүргэлт хоцорсон.',
+            ])
+            ->assertOk();
+
+        $this->assertSame($new, $item->fresh()->planned_end_date->toDateString());
+        $this->assertSame(0, $item->fresh()->overdue_days, 'Сунгасны дараа хоцролт үлдэх ёсгүй.');
+
+        $issue = $item->issues()->latest('created_at')->firstOrFail();
+        $this->assertSame('material_shortage', $issue->category);
+        // Хуучин огноо тайлбарт үлдэх ёстой — хэдэн хоногоор сунгасныг хожим
+        // тоолох боломжтой байх ёстой.
+        $this->assertStringContainsString($old, $issue->description);
+        $this->assertStringContainsString($new, $issue->description);
+        $this->assertStringContainsString('Цонхны хүргэлт', $issue->description);
+    }
+
+    public function test_a_deadline_cannot_be_pulled_earlier(): void
+    {
+        // Огноог урагш татах нь сунгах биш — хоцролтыг хиймлээр үүсгэнэ.
+        $item = $this->workItemWithQuantity();
+        $item->update(['planned_end_date' => now()->addDays(10)->toDateString()]);
+
+        $this->asInspector()
+            ->postJson("/api/v1/work-items/{$item->id}/extend", [
+                'plannedEndDate' => now()->addDays(2)->toDateString(),
+                'category' => 'weather',
+                'reason' => 'Урагшлуулах гэсэн',
+            ])
+            ->assertStatus(422);
+    }
+
+    public function test_a_contractor_cannot_extend_a_deadline(): void
+    {
+        $item = $this->workItemWithQuantity();
+        $rep = User::factory()->create(['role' => 'contractor']);
+
+        $this->actingAs($rep, 'sanctum')
+            ->postJson("/api/v1/work-items/{$item->id}/extend", [
+                'plannedEndDate' => now()->addDays(7)->toDateString(),
+                'category' => 'weather',
+                'reason' => 'Цас орсон',
+            ])
+            ->assertForbidden();
+    }
+
     public function test_progress_history_is_newest_first(): void
     {
         $item = $this->workItemWithQuantity();

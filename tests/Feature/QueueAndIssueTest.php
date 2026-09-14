@@ -12,6 +12,7 @@ use App\Models\User;
 use App\Models\WorkItem;
 use Database\Seeders\WorkTypeSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
@@ -200,6 +201,78 @@ class QueueAndIssueTest extends TestCase
             ->assertJsonPath('data.0.status', 'open');
     }
 
+    public function test_project_issue_list_carries_block_and_location(): void
+    {
+        $item = WorkItem::where('block_id', $this->block->id)->firstOrFail();
+
+        $this->actingAs($this->engineer, 'sanctum')
+            ->postJson("/api/v1/work-items/{$item->id}/issues", [
+                'category' => 'weather',
+                'description' => 'Бороо орсон.',
+            ])->assertCreated();
+
+        // Байршлын зам нь барилгын нэрийг агуулдаггүй тул жагсаалт дээр
+        // «3 давхар / 3А» гэсэн мөр аль объект дээр байгаа нь мэдэгдэхгүй.
+        $this->getJson("/api/v1/projects/{$this->project->id}/issues")
+            ->assertOk()
+            ->assertJsonPath('data.0.blockName', 'А блок')
+            ->assertJsonPath('data.0.workItemName', $item->name)
+            ->assertJsonPath('data.0.reportedBy', $this->engineer->name);
+    }
+
+    public function test_project_issues_filter_by_category_status_and_block(): void
+    {
+        $items = WorkItem::where('block_id', $this->block->id)->take(2)->get();
+
+        $this->actingAs($this->engineer, 'sanctum');
+        $this->postJson("/api/v1/work-items/{$items[0]->id}/issues", [
+            'category' => 'material_shortage', 'description' => 'Хавтан алга.',
+        ])->assertCreated();
+        $this->postJson("/api/v1/work-items/{$items[1]->id}/issues", [
+            'category' => 'weather', 'description' => 'Бороо.',
+        ])->assertCreated();
+
+        $url = "/api/v1/projects/{$this->project->id}/issues";
+
+        $this->getJson("{$url}?category=weather")->assertOk()->assertJsonCount(1, 'data');
+        $this->getJson("{$url}?status=open")->assertOk()->assertJsonCount(2, 'data');
+        $this->getJson("{$url}?status=resolved")->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson("{$url}?blockId={$this->block->id}")->assertOk()->assertJsonCount(2, 'data');
+
+        // Өөр блокийн id өгвөл энэ блокийн бүртгэл гоожихгүй.
+        $other = $this->project->blocks()->create([
+            'block_design_id' => $this->block->block_design_id,
+            'name' => 'Б блок',
+            'building_no' => '2',
+            'floors' => $this->block->floors,
+            'units_per_floor' => $this->block->units_per_floor,
+            'start_date' => '2026-09-01',
+        ]);
+        $this->getJson("{$url}?blockId={$other->id}")->assertOk()->assertJsonCount(0, 'data');
+    }
+
+    public function test_open_issues_are_listed_before_resolved_ones(): void
+    {
+        $items = WorkItem::where('block_id', $this->block->id)->take(2)->get();
+
+        $this->actingAs($this->engineer, 'sanctum');
+        foreach ($items as $item) {
+            $this->postJson("/api/v1/work-items/{$item->id}/issues", [
+                'category' => 'weather', 'description' => 'Бороо.',
+            ])->assertCreated();
+        }
+
+        // Хамгийн СҮҮЛД бүртгэгдсэнийг хаана — огноогоор эрэмбэлбэл энэ нь
+        // дээрээ үлдэнэ. Нээлттэй нь ажил, шийдэгдсэн нь түүх.
+        $newest = $this->getJson("/api/v1/projects/{$this->project->id}/issues")->json('data.0.id');
+        $this->patchJson("/api/v1/issues/{$newest}", ['status' => 'resolved'])->assertOk();
+
+        $this->assertSame(
+            'open',
+            $this->getJson("/api/v1/projects/{$this->project->id}/issues")->json('data.0.status')
+        );
+    }
+
     public function test_unknown_category_is_rejected(): void
     {
         $item = WorkItem::where('block_id', $this->block->id)->firstOrFail();
@@ -264,6 +337,58 @@ class QueueAndIssueTest extends TestCase
 
         // Хувь нь БАТЛАГДСАНААР бодогдоно — мэдээлэгдсэнээр биш.
         $this->assertSame(0, $d['percentage']);
+    }
+
+    /**
+     * Явцын хувь нь ажлын мөрүүдийн ДУНДАЖ — тоо хэмжээний нийлбэр биш.
+     *
+     * Тоо хэмжээг нэмэх нь м², м³, ширхгийг нийлүүлнэ: «306,970 эхлээгүй»
+     * гэсэн тоо ЮУ 306,970 болохыг хэлж чадахгүй.
+     */
+    public function test_dashboard_counts_split_work_items_into_three_groups(): void
+    {
+        $total = WorkItem::where('block_id', $this->block->id)->count();
+        $item = WorkItem::where('block_id', $this->block->id)->firstOrFail();
+        $this->reportOn($item, 5);
+
+        $d = $this->actingAs($this->inspector, 'sanctum')
+            ->getJson("/api/v1/projects/{$this->project->id}/dashboard")
+            ->json('data');
+
+        $this->assertSame($total, $d['totalItems']);
+        $this->assertSame(0, $d['completedItems']);
+        $this->assertSame(1, $d['inProgressItems']);
+        // Гурав нь харилцан үл огтлолцоно — нийлбэр нь ҮРГЭЛЖ нийт тоотой
+        // тэнцэнэ. Эс бөгөөс зурвасын хэсгүүд 100%-иас хэтэрнэ.
+        $this->assertSame(
+            $total,
+            $d['completedItems'] + $d['inProgressItems'] + $d['notStartedItems'],
+        );
+    }
+
+    /**
+     * Хувь нь мөр бүрийн ДУНДАЖ — дутуу ажил хагас оноо авна.
+     *
+     * Зөвхөн бүрэн дууссаныг тоолбол бүх ажил нь хагастай төсөл 0% гэж
+     * харагдана. Тоо хэмжээг нэмбэл м², м³, ширхэг холилдоно.
+     */
+    public function test_percentage_gives_partial_credit(): void
+    {
+        // HTTP-ээр 3,290 мөрийг батлуулах нь удаан тул шууд бичнэ —
+        // самбар нь яг эдгээр баганаас уншдаг.
+        WorkItem::where('block_id', $this->block->id)->update([
+            'accepted_qty' => DB::raw('planned_qty / 2'),
+            'reported_qty' => DB::raw('planned_qty / 2'),
+            'status' => 'in_progress',
+        ]);
+
+        $d = $this->actingAs($this->inspector, 'sanctum')
+            ->getJson("/api/v1/projects/{$this->project->id}/dashboard")
+            ->json('data');
+
+        $this->assertSame(0, $d['completedItems']);
+        $this->assertSame(50, $d['percentage']);
+        $this->assertSame(50, $d['blocks'][0]['percentage']);
     }
 
     public function test_dashboard_block_totals_sum_to_the_project_total(): void

@@ -136,6 +136,9 @@ Route::prefix('v1')->group(function () {
             Route::patch('work-items/{workItem}', [WorkItemPlanController::class, 'update']);
             Route::patch('work-items/{workItem}/contractor', [WorkItemAssignmentController::class, 'assignOne']);
             Route::delete('work-items/{workItem}', [WorkItemPlanController::class, 'destroy']);
+
+            // --- Хугацаа сунгах (шалтгаан заавал) ---
+            Route::post('work-items/{workItem}/extend', [WorkItemPlanController::class, 'extend']);
             Route::get('work-items/{workItem}/progress', [WorkItemController::class, 'progress']);
             Route::post('work-items/{workItem}/progress', [WorkItemController::class, 'storeProgress']);
             Route::get('work-items/{workItem}/inspections', [WorkItemController::class, 'inspections']);
