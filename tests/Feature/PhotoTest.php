@@ -199,6 +199,54 @@ class PhotoTest extends TestCase
             ->assertCreated();
     }
 
+    // -- Зургийн хаяг ----------------------------------------------------
+
+    /**
+     * Зургийн хаяг ХОСТГҮЙ байх ёстой.
+     *
+     * Бүтэн хаяг нь ирж буй хүсэлтийн Host толгойноос үүсдэг. Frontend нь
+     * проксигоор `127.0.0.1` руу залгадаг тул зураг `http://127.0.0.1/...`
+     * гэсэн хаягтай болж, хэрэглэгчийн хөтөч ӨӨРИЙНХӨӨ компьютер руу залгаж
+     * зураг харагддаггүй байв. Харьцангуй хаяг энэ бүх ангийн алдааг арилгана.
+     */
+    public function test_the_photo_url_is_relative_and_has_no_host(): void
+    {
+        $this->upload();
+
+        $url = $this->actingAs($this->engineer, 'sanctum')
+            ->getJson("/api/v1/work-items/{$this->item->id}/photos")
+            ->assertOk()
+            ->json('data.0.url');
+
+        $this->assertStringStartsNotWith('http', $url, 'Хаяг хостгүй байх ёстой.');
+        $this->assertStringStartsWith('/photos/', $url, "Буруу хэлбэр: {$url}");
+        $this->assertStringContainsString('signature=', $url);
+        $this->assertStringContainsString('expires=', $url);
+    }
+
+    public function test_the_relative_signature_is_accepted(): void
+    {
+        $this->upload();
+
+        $url = $this->actingAs($this->engineer, 'sanctum')
+            ->getJson("/api/v1/work-items/{$this->item->id}/photos")
+            ->json('data.0.url');
+
+        // Хөтөч энэ замыг прокси дамжуулан дуудна — хост юу ч байсан хүчинтэй.
+        $this->get('/api/v1'.$url)->assertOk();
+    }
+
+    public function test_a_tampered_signature_is_rejected(): void
+    {
+        $this->upload();
+
+        $url = $this->actingAs($this->engineer, 'sanctum')
+            ->getJson("/api/v1/work-items/{$this->item->id}/photos")
+            ->json('data.0.url');
+
+        $this->get('/api/v1'.$url.'x')->assertForbidden();
+    }
+
     public function test_inspector_cannot_attach_photos(): void
     {
         // Зураг бол гүйцэтгэлийн нотолгоо — хянагч биш, гүйцэтгэгч тавина.

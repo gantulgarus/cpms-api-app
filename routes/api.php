@@ -34,7 +34,9 @@ Route::prefix('v1')->group(function () {
      * хамгаалж, хугацаа нь дуусахад хаяг хүчингүй болно.
      */
     Route::get('photos/{photo}/file', [PhotoController::class, 'file'])
-        ->middleware('signed')
+        // `signed:relative` — гарын үсэг нь зөвхөн зам + query дээр тооцогдоно.
+        // Хост шалгахгүй тул прокси дамжуулсан ч хүчинтэй хэвээр.
+        ->middleware('signed:relative')
         ->name('photos.file');
 
     // --- Нэвтрэлт ---
