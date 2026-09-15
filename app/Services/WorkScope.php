@@ -22,6 +22,12 @@ use Illuminate\Database\Query\Builder as QueryBuilder;
  * dashboard, middleware гэсэн 5 газар хэрэгтэй. Тус тусад бичвэл заавал
  * зөрнө — тэгэхэд нэгтгэл "204 ажил" гэж бичээд, дарахад 12 гарч ирнэ.
  * (Ийм зөрүү бид нэг удаа аваад үзсэн: блокийн үндэс зангилааны шүүлтүүр.)
+ *
+ * ЗАСВАР: `workItems()` ба `rawWorkItems()` нь урьд нь ЗӨВХӨН гүйцэтгэгчийг
+ * шүүдэг байв. Блокийн ЖАГСААЛТ хязгаарлагдаж, ХЯНАХ САМБАР хязгаарлагддаггүй
+ * байсан тул нэг барилга хариуцсан инженер самбар дээр 75 барилгын тоог
+ * хараад, карт дээр нь дарахад 403 авдаг байв. Тоо нь бас түүнийх биш —
+ * «таны ажил 3% явлаа» гэсэн мэдээлэл огт өөр барилгуудынх байсан.
  */
 class WorkScope
 {
@@ -29,7 +35,11 @@ class WorkScope
     public function workItems(EloquentBuilder $query, ?User $user): EloquentBuilder
     {
         if ($user?->isContractorRep()) {
-            $query->where('contractor_id', $user->contractor_id);
+            return $query->where('contractor_id', $user->contractor_id);
+        }
+
+        if ($user && ! $user->canSeeAllBlocks()) {
+            $query->whereIn('block_id', $user->scope_block_ids ?? []);
         }
 
         return $query;
@@ -39,7 +49,11 @@ class WorkScope
     public function rawWorkItems(QueryBuilder $query, ?User $user, string $alias = 'wi'): QueryBuilder
     {
         if ($user?->isContractorRep()) {
-            $query->where("{$alias}.contractor_id", $user->contractor_id);
+            return $query->where("{$alias}.contractor_id", $user->contractor_id);
+        }
+
+        if ($user && ! $user->canSeeAllBlocks()) {
+            $query->whereIn("{$alias}.block_id", $user->scope_block_ids ?? []);
         }
 
         return $query;

@@ -12,6 +12,7 @@ use App\Models\WorkItem;
 use App\Models\WorkType;
 use Database\Seeders\WorkTypeSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 /**
@@ -139,6 +140,54 @@ class EmptyBlockTest extends TestCase
 
         $this->assertSame($before, Location::where('block_id', $id)->count());
         $this->assertGreaterThan(0, WorkItem::where('block_id', $id)->count());
+    }
+
+    /**
+     * HTTP эндпойнтоор загвар буулгах.
+     *
+     * ЯАГААД ТУСДАА ТЕСТ ХЭРЭГТЭЙ ВЭ: доорх тестүүд `ApplyBlockDesign`-ыг
+     * ШУУД дууддаг тул контроллероос job руу дамжих гүүрийг огт шалгадаггүй
+     * байв. Яг тэнд алдаа нуугдаж байсан: route `{blockDesign}` гэж бичигдсэн
+     * атал метод `$design` гэж хүлээж авдаг байсан тул Laravel-ийн implicit
+     * binding унтарч, ХООСОН модель ирж, `designId` нь `null` болж байв.
+     *
+     * Алдаа нь 404 биш, «Argument #2 ($designId) must be of type string»
+     * гэсэн огт хамааралгүй мессежээр гардаг тул олоход хэцүү.
+     */
+    public function test_design_can_be_applied_through_the_http_endpoint(): void
+    {
+        Queue::fake();
+
+        [$id] = $this->createEmpty(4, 0);
+        $design = BlockDesign::where('floors', 12)->firstOrFail();
+
+        $this->actingAs($this->manager, 'sanctum')
+            ->postJson("/api/v1/block-designs/{$design->id}/apply", ['blockId' => $id])
+            ->assertStatus(202)
+            ->assertJsonPath('data.status', 'queued')
+            // Хоосон модель ирсэн бол нийт тоо 0 болно.
+            ->assertJsonPath('data.total', $design->estimatedItems());
+
+        Queue::assertPushed(
+            ApplyBlockDesign::class,
+            fn (ApplyBlockDesign $job) => $job->designId === $design->id && $job->blockId === $id,
+        );
+    }
+
+    public function test_applying_a_design_to_a_block_that_already_has_work_is_rejected(): void
+    {
+        Queue::fake();
+
+        [$id] = $this->createEmpty(4, 0);
+        $design = BlockDesign::where('floors', 12)->firstOrFail();
+        (new ApplyBlockDesign($id, $design->id, '2026-09-01'))->handle();
+
+        // Хоёр дахин буулгавал байршил, ажил давхарлаж бүх тоо худал болно.
+        $this->actingAs($this->manager, 'sanctum')
+            ->postJson("/api/v1/block-designs/{$design->id}/apply", ['blockId' => $id])
+            ->assertStatus(409);
+
+        Queue::assertNothingPushed();
     }
 
     public function test_work_is_generated_on_the_existing_locations(): void

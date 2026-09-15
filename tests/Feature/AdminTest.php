@@ -122,6 +122,63 @@ class AdminTest extends TestCase
             ->assertJsonPath('data.scopeBlockIds', []);
     }
 
+    /**
+     * Үүрэг солиход ТҮҮНЭЭС ГАРАХ эрхүүд хамт өөрчлөгдөнө.
+     *
+     * Веб дээр «Засах» цонх нэмэгдсэн тул энэ урсгал одоо бодитоор
+     * хэрэглэгдэнэ: хүн ажлаа сольж, дансаа дагуулж явна. Дансыг устгаад
+     * шинээр үүсгэвэл түүний мэдээлсэн бүх бүртгэл өнчин болно.
+     */
+    public function test_role_change_updates_the_derived_permissions(): void
+    {
+        $this->asAdmin();
+
+        $id = $this->postJson('/api/v1/users', [
+            'name' => 'Талбайн инженер',
+            'email' => 'shiljilt@cpms.mn',
+            'role' => 'site_engineer',
+        ])->assertCreated()->json('data.id');
+
+        $this->patchJson("/api/v1/users/{$id}", ['role' => 'inspector'])
+            ->assertOk()
+            ->assertJsonPath('data.role', 'inspector')
+            ->assertJsonPath('data.roleLabel', User::ROLES['inspector'])
+            ->assertJsonPath('data.canInspect', true)
+            ->assertJsonPath('data.canReportProgress', false);
+    }
+
+    public function test_deactivated_user_can_be_reactivated(): void
+    {
+        $this->asAdmin();
+
+        $target = $this->user('site_engineer', ['email' => 'buts@cpms.mn']);
+
+        $this->deleteJson("/api/v1/users/{$target->id}")
+            ->assertOk()
+            ->assertJsonPath('data.isActive', false);
+
+        // Хаах нь УСТГАХ биш — эргүүлэн нээх зам байх ёстой.
+        $this->patchJson("/api/v1/users/{$target->id}", ['isActive' => true])
+            ->assertOk()
+            ->assertJsonPath('data.isActive', true);
+    }
+
+    public function test_email_can_stay_the_same_when_editing(): void
+    {
+        $this->asAdmin();
+
+        $target = $this->user('site_engineer', ['email' => 'huvaaralgui@cpms.mn']);
+
+        // Нэр засахад имэйлээ хэвээр илгээнэ — `unique` дүрэм өөрийг нь
+        // үл тоомсорлох ёстой, эс бөгөөс нэр засах бүрт 422 гарна.
+        $this->patchJson("/api/v1/users/{$target->id}", [
+            'name' => 'Шинэ нэр',
+            'email' => 'huvaaralgui@cpms.mn',
+        ])
+            ->assertOk()
+            ->assertJsonPath('data.name', 'Шинэ нэр');
+    }
+
     public function test_deactivated_user_cannot_log_in(): void
     {
         $this->asAdmin();
@@ -215,6 +272,9 @@ class AdminTest extends TestCase
         $inspector = collect($roles)->firstWhere('value', 'inspector');
         $this->assertTrue($inspector['canInspect']);
         $this->assertFalse($inspector['canReportProgress']);
+        // Дэлгэц «өөрийн эрхээ бууруулж байна уу» гэдгийг энэ талбараар мэднэ.
+        $this->assertFalse($inspector['canManageUsers']);
+        $this->assertTrue(collect($roles)->firstWhere('value', 'admin')['canManageUsers']);
     }
 
     // -----------------------------------------------------------------

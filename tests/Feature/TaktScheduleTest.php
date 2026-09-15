@@ -205,6 +205,60 @@ class TaktScheduleTest extends TestCase
             ->assertStatus(422);
     }
 
+    /**
+     * Нэгтгэлийн бүлэг бүр «хэзээнээс хэзээ хүртэл» гэсэн цонхтой байна.
+     *
+     * Огноог хэрэглэгч гараар бичдэггүй — давхрын хугацаанаас автоматаар
+     * гардаг. Тиймээс хуваарийн үр дүнг ХАРАХ цорын ганц газар нь энэ
+     * жагсаалт. Огноо ирэхгүй бол хуваарь ажиллаж байгаа эсэхийг хэрэглэгч
+     * мэдэх арга байхгүй.
+     */
+    public function test_summary_groups_expose_the_planned_window(): void
+    {
+        $block = $this->blockWithWork();
+
+        $data = $this->actingAs($this->manager)
+            ->getJson("/api/v1/blocks/{$block->id}/summary?groupBy=floor")
+            ->assertOk()
+            ->json('data');
+
+        $this->assertNotNull($data['totals']['plannedStartDate']);
+        $this->assertNotNull($data['totals']['plannedEndDate']);
+
+        foreach ($data['groups'] as $group) {
+            $this->assertNotNull($group['plannedStartDate'], "«{$group['label']}» эхлэх огноогүй.");
+            $this->assertLessThanOrEqual($group['plannedEndDate'], $group['plannedStartDate']);
+        }
+
+        // Блокийн цонх нь бүлгүүдийг БҮРЭН хамарна.
+        $this->assertSame(
+            min(array_column($data['groups'], 'plannedStartDate')),
+            $data['totals']['plannedStartDate'],
+        );
+        $this->assertSame(
+            max(array_column($data['groups'], 'plannedEndDate')),
+            $data['totals']['plannedEndDate'],
+        );
+    }
+
+    public function test_summary_groups_show_the_takt_train(): void
+    {
+        $block = $this->blockWithWork();
+
+        $groups = collect(
+            $this->actingAs($this->manager)
+                ->getJson("/api/v1/blocks/{$block->id}/summary?groupBy=floor")
+                ->json('data.groups')
+        )->keyBy('label');
+
+        // Дээд давхар доод давхраасаа ХОЖУУ эхэлнэ — жагсаалт дээр энэ нь
+        // нүдэнд харагдах ёстой, эс бөгөөс хуваарь ажиллаагүйтэй адил.
+        $this->assertTrue(
+            $groups['2-р давхар']['plannedStartDate'] < $groups['5-р давхар']['plannedStartDate'],
+            'Хуваарийн урсгал жагсаалт дээр харагдахгүй байна.'
+        );
+    }
+
     public function test_contractors_cannot_reschedule(): void
     {
         $block = $this->emptyBlock();
@@ -213,6 +267,21 @@ class TaktScheduleTest extends TestCase
         $this->actingAs($contractor)
             ->postJson("/api/v1/blocks/{$block->id}/schedule", ['taktDays' => 7])
             ->assertForbidden();
+    }
+
+    /** Давхар бүрд нэг ажлын төрөл буусан блок. */
+    private function blockWithWork(int $taktDays = 5): Block
+    {
+        $block = $this->emptyBlock($taktDays);
+
+        $this->actingAs($this->manager)
+            ->postJson("/api/v1/blocks/{$block->id}/work-items", [
+                'workTypeIds' => [WorkType::where('level', 'floor')->firstOrFail()->id],
+                'plannedQty' => 10,
+            ])
+            ->assertCreated();
+
+        return $block;
     }
 
     private function emptyBlock(int $taktDays = 5): Block

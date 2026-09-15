@@ -55,6 +55,10 @@ class UserController extends Controller
                 'canReportProgress' => in_array($value, User::REPORTER_ROLES, true),
                 'canInspect' => in_array($value, User::INSPECTOR_ROLES, true),
                 'seesAllBlocks' => in_array($value, User::UNRESTRICTED_ROLES, true),
+                // Дэлгэц «өөрийн эрхээ бууруулж байна уу» гэдгийг УРЬДЧИЛЖ
+                // мэдэхийн тулд хэрэгтэй. Аль үүрэг админ болохыг client тал
+                // хатуу бичвэл сервертэй зөрөх өдөр ирнэ.
+                'canManageUsers' => in_array($value, User::USER_MANAGER_ROLES, true),
             ])->values(),
         ]);
     }

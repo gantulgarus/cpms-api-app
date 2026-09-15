@@ -90,6 +90,29 @@ class WorkItem extends Model
         return round(max((float) $this->planned_qty - (float) $this->accepted_qty, 0), 3);
     }
 
+    /**
+     * Нэг ажлын явцыг 0..1 болгон гаргах SQL илэрхийлэл.
+     *
+     * ЯАГААД НЭГ ГАЗАР ВЭ: хянах самбар ба блокийн нэгтгэл хоёр тусдаа
+     * `GROUP BY` query бичдэг. Томьёог хоёр газар давхардуулбал нэгийг нь
+     * өөрчлөхөд нөгөө нь хоцорно — яг тэр учраас А блок самбар дээр 3%,
+     * дотор нь ороход 11% гэж харагдаж байв. Хэрэглэгч алинд нь итгэхээ
+     * мэдэхгүй бол хоёулаа хэрэггүй.
+     *
+     * `least()` нь SQLite-д байхгүй тул CASE-ээр бичив.
+     *
+     * @param  string  $alias  Query доторх хүснэгтийн алиас (ж: `wi`).
+     */
+    public static function progressSql(string $alias = 'work_items'): string
+    {
+        return "case
+            when {$alias}.planned_qty <= 0 then 0
+            when {$alias}.accepted_qty >= {$alias}.planned_qty then 1.0
+            else {$alias}.accepted_qty / {$alias}.planned_qty
+        end";
+    }
+
+    /** Хэдэн хувь батлагдсан бэ — ГАНЦ мөрийн хувьд (нэгж холилдохгүй). */
     public function getPercentageAttribute(): int
     {
         $planned = (float) $this->planned_qty;

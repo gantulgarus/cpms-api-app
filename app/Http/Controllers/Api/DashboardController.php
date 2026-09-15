@@ -102,15 +102,10 @@ class DashboardController extends Controller
              * хийгдсэн ажил хагас оноо авна: зөвхөн бүрэн дууссаныг тоолбол
              * 44% нь эхэлсэн төсөл 3% гэж харагдана.
              *
-             * `least()` нь SQLite-д байхгүй тул CASE-ээр бичив.
+             * Томьёо нь `WorkItem::progressSql()`-д — блокийн нэгтгэл мөн
+             * түүнийг хэрэглэдэг тул хоёр дэлгэц хэзээ ч зөрөхгүй.
              */
-            ->selectRaw(
-                'sum(case
-                    when wi.planned_qty <= 0 then 0
-                    when wi.accepted_qty >= wi.planned_qty then 1.0
-                    else wi.accepted_qty / wi.planned_qty
-                end) as progress_sum'
-            )
+            ->selectRaw('sum('.WorkItem::progressSql('wi').') as progress_sum')
             ->selectRaw("sum(case when wi.review_state = 'pending' then 1 else 0 end) as pending")
             ->selectRaw(
                 "sum(case when wi.status <> 'completed' and wi.planned_end_date < ? then 1 else 0 end) as overdue",

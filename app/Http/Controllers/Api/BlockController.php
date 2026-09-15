@@ -90,11 +90,18 @@ class BlockController extends Controller
     }
 
     /**
-     * POST /block-designs/{design}/apply
+     * POST /block-designs/{blockDesign}/apply
      *
      * Синхрон биш: ~3,290 мөр үүсэх тул batch id буцаагаад дэлгэц хянана.
+     *
+     * АРГУМЕНТЫН НЭР ЗААВАЛ `$blockDesign` БАЙНА — route дахь `{blockDesign}`
+     * тэмдэгттэй ЯГ таарах ёстой. Laravel-ийн implicit binding нь төрлөөр
+     * биш НЭРЭЭР холбодог: `$design` гэж нэрлэвэл холболт унтарч, контейнер
+     * ХООСОН `BlockDesign` өгнө. Тэр нь 404 биш — `$design->id` нь `null`
+     * болж, алдаа нь хамаагүй өөр газар («designId must be of type string»)
+     * гарна. Нэр солихоос өмнө энэ тайлбарыг уншина уу.
      */
-    public function applyDesign(Request $request, BlockDesign $design): JsonResponse
+    public function applyDesign(Request $request, BlockDesign $blockDesign): JsonResponse
     {
         $validated = $request->validate([
             'blockId' => ['required', 'uuid', 'exists:blocks,id'],
@@ -114,7 +121,7 @@ class BlockController extends Controller
             'id' => $jobId,
             'status' => 'queued',
             'progress' => 0,
-            'total' => $design->estimatedItems(),
+            'total' => $blockDesign->estimatedItems(),
             'result' => ['blockId' => $block->id],
             'error' => null,
         ];
@@ -125,7 +132,7 @@ class BlockController extends Controller
 
         ApplyBlockDesign::dispatch(
             $block->id,
-            $design->id,
+            $blockDesign->id,
             $validated['startDate'] ?? $block->start_date?->toDateString() ?? now()->toDateString(),
             $jobId,
         );

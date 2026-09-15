@@ -7,6 +7,8 @@ use App\Models\Company;
 use App\Models\Contractor;
 use App\Models\Project;
 use App\Models\User;
+use App\Models\WorkType;
+use Database\Seeders\WorkTypeSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
@@ -174,6 +176,113 @@ class AuthTest extends TestCase
     // -----------------------------------------------------------------
 
     /** @return array{0: Block, 1: Block} */
+    /**
+     * Хамрах хүрээ нь ХЯНАХ САМБАР дээр ч мөрдөгдөнө.
+     *
+     * БОДИТ АЛДАА БАЙСАН: блокийн жагсаалт шүүгддэг байсан ч самбар
+     * шүүгддэггүй байв. Нэг барилга хариуцсан инженер 75 барилгын тоог
+     * хараад, карт дээр нь дарахад 403 авна. Дээрээс нь «явц 3%» гэсэн тоо
+     * нь өөрийнх нь биш, огт өөр барилгуудынх байсан.
+     */
+    public function test_dashboard_only_covers_blocks_in_scope(): void
+    {
+        [$own, $other] = $this->twoBlocksWithWork();
+
+        $engineer = $this->makeUser('site_engineer', ['scope_block_ids' => [$own->id]]);
+
+        $data = $this->actingAs($engineer, 'sanctum')
+            ->getJson("/api/v1/projects/{$own->project_id}/dashboard")
+            ->assertOk()
+            ->json('data');
+
+        $this->assertCount(1, $data['blocks'], 'Зөвхөн хариуцсан барилга орно.');
+        $this->assertSame($own->id, $data['blocks'][0]['id']);
+        $this->assertSame(
+            $own->workItems()->count(),
+            $data['totalItems'],
+            'Ажлын тоонд гадны барилгын мөр орсон байна.'
+        );
+
+        // Захирал хоёуланг нь хардаг — хязгаарлалт нь үүргээс хамаарна.
+        $this->assertCount(
+            2,
+            $this->actingAs($this->makeUser('director'), 'sanctum')
+                ->getJson("/api/v1/projects/{$own->project_id}/dashboard")
+                ->json('data.blocks')
+        );
+
+        $this->assertNotNull($other->id);
+    }
+
+    public function test_queue_only_covers_blocks_in_scope(): void
+    {
+        [$own, $other] = $this->twoBlocksWithWork();
+
+        $engineer = $this->makeUser('site_engineer', ['scope_block_ids' => [$own->id]]);
+
+        $rows = $this->actingAs($engineer, 'sanctum')
+            ->getJson("/api/v1/projects/{$own->project_id}/queue?type=overdue&pageSize=200")
+            ->assertOk()
+            ->json('data');
+
+        $outsiders = collect($rows)->filter(fn ($w) => $w['blockId'] !== $own->id);
+        $this->assertCount(0, $outsiders, 'Дараалалд гадны барилгын ажил орсон байна.');
+        $this->assertNotNull($other->id);
+    }
+
+    public function test_engineer_without_a_scope_still_sees_everything_on_the_dashboard(): void
+    {
+        // Хоосон хүрээ = хязгаарлалтгүй. Оноогоогүй хэрэглэгчийг санамсаргүй
+        // хаахгүйн тулд ийм байдлаар шийдсэн — энэ дүрэм самбарт ч үйлчилнэ.
+        [$own] = $this->twoBlocksWithWork();
+
+        $this->assertCount(
+            2,
+            $this->actingAs($this->makeUser('site_engineer'), 'sanctum')
+                ->getJson("/api/v1/projects/{$own->project_id}/dashboard")
+                ->json('data.blocks')
+        );
+    }
+
+    /** @return array{0: Block, 1: Block} Ажилтай хоёр блок. */
+    private function twoBlocksWithWork(): array
+    {
+        [$a, $b] = $this->twoBlocks();
+
+        // Ажлын төрлийн лавлахыг seeder-ээс авна — гараар угсарвал баганын
+        // шаардлага өөрчлөгдөхөд энэ тест дангаараа унана.
+        $this->seed(WorkTypeSeeder::class);
+        $type = WorkType::where('level', 'block')->firstOrFail();
+
+        foreach ([$a, $b] as $block) {
+            $location = $block->locations()->create([
+                'parent_id' => null,
+                'level' => 'block',
+                'name' => $block->name,
+                'path' => $block->name,
+                'path_key' => '/',     // түр утга — доор жинхэнэ id-гаар солино
+                'sequence_number' => 0,
+            ]);
+            // `path_key` нь удмаар шүүхэд хэрэглэгддэг materialized path.
+            // Id нь `HasUuids`-аар үүсдэг тул үүсгэсний ДАРАА л мэдэгдэнэ.
+            $location->update(['path_key' => "/{$location->id}/"]);
+
+            $block->workItems()->create([
+                'location_id' => $location->id,
+                'work_type_id' => $type->id,
+                'name' => 'Ажил — '.$block->name,
+                'unit' => $type->unit,
+                'planned_qty' => 100,
+                'planned_start_date' => '2026-01-01',
+                'planned_end_date' => '2026-01-10',
+                'status' => 'not_started',
+                'review_state' => 'none',
+            ]);
+        }
+
+        return [$a, $b];
+    }
+
     private function twoBlocks(): array
     {
         $company = Company::create(['name' => 'Инэл ХХК']);

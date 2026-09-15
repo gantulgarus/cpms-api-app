@@ -372,6 +372,40 @@ class QueueAndIssueTest extends TestCase
      * Зөвхөн бүрэн дууссаныг тоолбол бүх ажил нь хагастай төсөл 0% гэж
      * харагдана. Тоо хэмжээг нэмбэл м², м³, ширхэг холилдоно.
      */
+    /**
+     * Самбар дээрх блокийн хувь ба блокийн ХУУДАС дээрх хувь ижил байх ёстой.
+     *
+     * Энэ нь бодит алдаа байсан: самбар нь мөрүүдийн дундажаар, блокийн
+     * нэгтгэл нь тоо хэмжээгээр боддог байсан тул нэг блок 3% ба 11% гэж
+     * хоёр өөр харагдаж байв. Хэрэглэгч алинд нь итгэхээ мэдэхгүй бол
+     * хоёулаа хэрэггүй.
+     */
+    public function test_dashboard_and_block_page_report_the_same_percentage(): void
+    {
+        $items = WorkItem::where('block_id', $this->block->id)->take(3)->get();
+
+        foreach ($items as $item) {
+            $this->reportOn($item, (float) $item->planned_qty);
+            $this->actingAs($this->inspector, 'sanctum')
+                ->postJson("/api/v1/work-items/{$item->id}/inspections", [
+                    'stage' => 'client',
+                    'result' => 'accepted',
+                    'acceptedQty' => (float) $item->planned_qty,
+                ])->assertCreated();
+        }
+
+        $this->actingAs($this->inspector, 'sanctum');
+
+        $fromDashboard = collect(
+            $this->getJson("/api/v1/projects/{$this->project->id}/dashboard")->json('data.blocks')
+        )->firstWhere('id', $this->block->id);
+
+        $fromPage = $this->getJson("/api/v1/blocks/{$this->block->id}/summary")->json('data.totals');
+
+        $this->assertSame($fromDashboard['percentage'], $fromPage['percentage']);
+        $this->assertSame($fromDashboard['totalItems'], $fromPage['workItems']);
+    }
+
     public function test_percentage_gives_partial_credit(): void
     {
         // HTTP-ээр 3,290 мөрийг батлуулах нь удаан тул шууд бичнэ —

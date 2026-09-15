@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Block;
 use App\Models\Contractor;
 use App\Models\Location;
+use App\Models\WorkItem;
 use App\Models\WorkType;
 use App\Models\WorkTypeGroup;
 use Illuminate\Database\Query\Builder;
@@ -37,7 +38,10 @@ class BlockSummaryService
 
         return [
             'block' => ['id' => $block->id, 'name' => $block->name],
-            'totals' => $this->totals($groups),
+            // Нийт хувь нь бүлгүүдийн хувийн дундажаас БИШ, түүхий явцын
+            // нийлбэрээс гарна: бүлгүүд өөр өөр тооны ажилтай тул бүлгийн
+            // хувиудыг дундажлах нь жижиг бүлгийг хэт өргөмжилнө.
+            'totals' => $this->totals($groups, $rows),
             'groups' => $groups,
         ];
     }
@@ -65,8 +69,28 @@ class BlockSummaryService
             ->selectRaw('sum(wi.planned_qty) as planned_qty')
             ->selectRaw('sum(wi.reported_qty) as reported_qty')
             ->selectRaw('sum(wi.accepted_qty) as accepted_qty')
+            /*
+             * Явцын нийлбэр — хувийг ҮҮНЭЭС бодно, тоо хэмжээнээс биш.
+             *
+             * Нэг бүлэгт м², м³, ширхэг зэрэгцэн орж ирдэг. Тэдгээрийг нэмээд
+             * хувь гаргах нь ширхгээр хэмжигддэг ажил руу татагдана. Томьёо нь
+             * хянах самбартай ЯГ ижил байх ёстой — эс бөгөөс нэг блок хоёр
+             * дэлгэц дээр өөр хувьтай харагдана.
+             */
+            ->selectRaw('sum('.WorkItem::progressSql('wi').') as progress_sum')
+            // Гурван харилцан үл огтлолцох бүлэг — нийлбэр нь ажлын тоотой тэнцэнэ.
+            ->selectRaw("sum(case when wi.status = 'completed' then 1 else 0 end) as completed_items")
+            ->selectRaw("sum(case when wi.status = 'in_progress' then 1 else 0 end) as in_progress_items")
             ->selectRaw("sum(case when wi.review_state = 'pending' then 1 else 0 end) as pending_inspections")
-            // Энэ бүлэг хэзээ дуусах ёстой вэ — хамгийн сүүлийн товлосон огноо.
+            /*
+             * Бүлгийн ажлын ЦОНХ — хамгийн эрт эхлэх, хамгийн сүүл дуусах.
+             *
+             * Давхрын хугацаагаар огноо автоматаар бодогддог тул бүлэг бүр
+             * бодит зурвастай. Зөвхөн дуусах огноог харуулбал «энэ давхар
+             * хэзээ эхлэх ёстой байсан бэ» гэсэн асуултад хариулахын тулд
+             * мөр бүрийг нээх шаардлагатай болно.
+             */
+            ->selectRaw('min(wi.planned_start_date) as planned_start_date')
             ->selectRaw('max(wi.planned_end_date) as planned_end_date')
             ->selectRaw(
                 "sum(case when wi.status <> 'completed' and wi.planned_end_date < ? then 1 else 0 end) as overdue",
@@ -83,6 +107,17 @@ class BlockSummaryService
         return $query->get()->all();
     }
 
+    /**
+     * Огноог `Y-m-d` болгоно.
+     *
+     * SQLite-ийн `min()/max()` нь «2026-09-15 00:00:00» гэж буцаадаг бол
+     * MySQL нь `date` буцаана. Аль нь ч байсан дэлгэцэд өдөр л хэрэгтэй.
+     */
+    private static function dateOnly(mixed $value): ?string
+    {
+        return $value ? substr((string) $value, 0, 10) : null;
+    }
+
     /** Түлхүүрүүдэд шошго ба сэргээх шүүлтүүр нэмнэ (нэг нэмэлт query). */
     private function decorate(array $rows, string $groupBy): array
     {
@@ -93,21 +128,30 @@ class BlockSummaryService
             $key = (string) $row->group_key;
             $planned = (float) $row->planned_qty;
             $accepted = (float) $row->accepted_qty;
+            $items = (int) $row->work_items;
 
             return [
                 'key' => $key,
                 'label' => $labels[$key] ?? '—',
                 'filter' => $this->filterFor($groupBy, $key, $labels),
-                'workItems' => (int) $row->work_items,
+                'workItems' => $items,
                 'plannedQty' => round($planned, 3),
                 'reportedQty' => round((float) $row->reported_qty, 3),
                 'acceptedQty' => round($accepted, 3),
-                'percentage' => $planned > 0 ? (int) round($accepted / $planned * 100) : 0,
+                // Мөрүүдийн ДУНДАЖ — нэгж холилдсон тоо хэмжээнээс биш.
+                'percentage' => $items > 0
+                    ? (int) round((float) $row->progress_sum / $items * 100)
+                    : 0,
+                'completedItems' => (int) $row->completed_items,
+                'inProgressItems' => (int) $row->in_progress_items,
+                'notStartedItems' => max(
+                    $items - (int) $row->completed_items - (int) $row->in_progress_items,
+                    0
+                ),
                 'pendingInspections' => (int) $row->pending_inspections,
                 'overdue' => (int) $row->overdue,
-                'plannedEndDate' => $row->planned_end_date
-                    ? substr((string) $row->planned_end_date, 0, 10)
-                    : null,
+                'plannedStartDate' => self::dateOnly($row->planned_start_date),
+                'plannedEndDate' => self::dateOnly($row->planned_end_date),
                 '_order' => $order[$key] ?? PHP_INT_MAX,
             ];
         }, $rows);
@@ -178,21 +222,34 @@ class BlockSummaryService
         };
     }
 
-    private function totals(array $groups): array
+    /**
+     * @param  array<int, array>  $groups  Шошготой бүлгүүд
+     * @param  array<int, object>  $rows  Түүхий нэгтгэлийн мөрүүд
+     */
+    private function totals(array $groups, array $rows): array
     {
         $planned = array_sum(array_column($groups, 'plannedQty'));
         $accepted = array_sum(array_column($groups, 'acceptedQty'));
+        $starts = array_filter(array_column($groups, 'plannedStartDate'));
         $dates = array_filter(array_column($groups, 'plannedEndDate'));
 
+        $items = (int) array_sum(array_column($groups, 'workItems'));
+        $progress = array_sum(array_map(fn ($r) => (float) $r->progress_sum, $rows));
+
         return [
-            'workItems' => (int) array_sum(array_column($groups, 'workItems')),
+            'workItems' => $items,
             'plannedQty' => round($planned, 3),
             'reportedQty' => round(array_sum(array_column($groups, 'reportedQty')), 3),
             'acceptedQty' => round($accepted, 3),
-            'percentage' => $planned > 0 ? (int) round($accepted / $planned * 100) : 0,
+            'percentage' => $items > 0 ? (int) round($progress / $items * 100) : 0,
+            'completedItems' => (int) array_sum(array_column($groups, 'completedItems')),
+            'inProgressItems' => (int) array_sum(array_column($groups, 'inProgressItems')),
+            'notStartedItems' => (int) array_sum(array_column($groups, 'notStartedItems')),
             'pendingInspections' => (int) array_sum(array_column($groups, 'pendingInspections')),
             'overdue' => (int) array_sum(array_column($groups, 'overdue')),
-            // Блок бүхэлдээ хэзээ дуусах ёстой — бүлгүүдийн хамгийн сүүлийнх.
+            // Блок бүхэлдээ хэзээнээс хэзээ хүртэл — бүлгүүдийн хамгийн эрт
+            // эхлэл, хамгийн сүүлийн төгсгөл.
+            'plannedStartDate' => $starts ? min($starts) : null,
             'plannedEndDate' => $dates ? max($dates) : null,
         ];
     }
