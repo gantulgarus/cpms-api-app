@@ -115,7 +115,7 @@ class User extends Authenticatable
 
     protected $fillable = [
         'name', 'email', 'password',
-        'role', 'scope_block_ids', 'contractor_id', 'is_active',
+        'role', 'scope_block_ids', 'contractor_id', 'is_active', 'is_demo',
     ];
 
     protected $hidden = ['password', 'remember_token'];
@@ -127,6 +127,7 @@ class User extends Authenticatable
             'password' => 'hashed',
             'scope_block_ids' => 'array',
             'is_active' => 'boolean',
+            'is_demo' => 'boolean',
         ];
     }
 

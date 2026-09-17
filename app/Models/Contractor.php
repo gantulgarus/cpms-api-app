@@ -12,14 +12,14 @@ class Contractor extends Model
 
     protected $fillable = [
         'name', 'company_name', 'trade_specialty', 'contact_person',
-        'phone', 'email', 'access_code', 'access_code_expires_at',
+        'phone', 'email', 'access_code', 'access_code_expires_at', 'is_demo',
     ];
 
     protected $hidden = ['access_code'];
 
     protected function casts(): array
     {
-        return ['access_code_expires_at' => 'datetime'];
+        return ['access_code_expires_at' => 'datetime', 'is_demo' => 'boolean'];
     }
 
     public function workItems(): HasMany

@@ -1,60 +1,153 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# CPMS API v2 — Laravel
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Инэл ХХК-ийн барилгын удирдлагын системийн backend. `cpms-web/docs/api-v2-endpoints.md`-д
+тодорхойлсон гэрээг хэрэгжүүлнэ. Одоогийн v1 (Node, `:4000`) зэрэгцэн ажиллана.
 
-## About Laravel
+**Стек:** Laravel 12 · PostgreSQL 16 · Sanctum token
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## Суулгах
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+Энэ хавтас нь **бүтэн Laravel төсөл биш** — зөвхөн домэйний файлууд. Laravel-ийн
+суурь бүтцийг өөрөө үүсгээд дээр нь хуулна. Ингэснээр `composer.json`, `config/*`
+зэрэг өөрчлөгддөг boilerplate-ыг гар аргаар зохиохгүй.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+```bash
+# 1. Цэвэр Laravel-ийг ЭНЭ хавтас дотор үүсгэх
+cd cpms-api
+composer create-project laravel/laravel cpms-api-app
+cd cpms-api-app
+# routes/api.php ба Sanctum-ыг нэг дор нэмнэ (Laravel 11+ дээр заавал)
+php artisan install:api
 
-## Learning Laravel
+# 2. Домэйний файлуудыг дээр нь нэгтгэх.
+#    `/.` нь заавал — эс бөгөөс ./app/app гэсэн үүрлэсэн хавтас үүснэ.
+for d in app bootstrap database routes tests; do cp -R "../$d/." "./$d/"; done
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+# 3. PostgreSQL холболт (.env)
+DB_CONNECTION=pgsql
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_DATABASE=cpms
+DB_USERNAME=cpms
+DB_PASSWORD=secret
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+# 4. Хүснэгт үүсгэж, ажлын төрлийн сан ачаалах
+# `--seed` нь DatabaseSeeder → DemoSeeder дуудна: хэрэглэгч, компани, төсөл,
+# 47 ажлын төрөл, бүтэн блок (3,290 ажлын нэгж) бүгд үүснэ.
+php artisan migrate:fresh --seed
 
-## Laravel Sponsors
+# Тест PostgreSQL-ийн тусдаа санг ашиглана (.env.testing)
+createdb cpms_test
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+# 5. Зургийн сан бэлдэх (private disk, гарын үсэгтэй хаягаар үйлчилнэ)
+php artisan storage:link
 
-### Premium Partners
+# 6. Ажиллуулах
+php artisan serve --port=8000
+php artisan queue:work        # загвар буулгах job-д шаардлагатай
+```
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+Frontend-ийг холбох:
 
-## Contributing
+```bash
+# cpms-web дотор
+CPMS_API_URL=http://127.0.0.1:8000/api/v1 NEXT_PUBLIC_CPMS_V2=1 npm run dev
+```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+`CPMS_MOCK` тавихгүй — тэгвэл proxy жинхэнэ Laravel рүү явна.
 
-## Code of Conduct
+## Production — танилцуулгын өгөгдөл
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+**`migrate:fresh` production дээр ХЭЗЭЭ Ч БИТГИЙ АЖИЛЛУУЛ.** Тэр нь бүх
+хүснэгтийг устгаад шинээр үүсгэдэг — дээрх «Суулгах» хэсгийн тушаал зөвхөн
+локалд зориулагдсан. Production дээр зөвхөн `migrate` (устгахгүй, зөвхөн нэмнэ)
+ба `db:seed --class=DemoSeeder` хоёрыг ашиглана.
 
-## Security Vulnerabilities
+```bash
+# Серверт (SSH)
+cd /path/to/cpms-api-app
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+php artisan down                                   # засвартай горим
+php artisan migrate --force                        # ЗӨВХӨН нэмнэ, устгахгүй
+php artisan db:seed --class=DemoSeeder --force     # demo өгөгдөл
+php artisan storage:link                           # зураг үйлчлэхэд шаардлагатай
+php artisan up
+```
 
-## License
+Seeder нь ДАВТАГДАХ: хоёр удаа ажиллуулахад мөр давхардахгүй (`firstOrCreate`
+ба «аль хэдийн үүссэн» шалгалтууд). Ойролцоогоор 6,800 ажлын нэгж, 1,500 явцын
+бичлэг, 36 саатал, 2,000 зураг үүснэ; зургийн файл ~15 МБ эзэлнэ.
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
-# cpms-api-app
+Явц бүртгэгдсэн ажлын нэгж бүр зурагтай гарна. Явцгүй ажил зураггүй байх нь
+зөв — хийгээгүй ажлын нотолгоо байхгүй.
+
+### Жинхэнэ төсөл эхлэхэд demo өгөгдлийг устгах
+
+```bash
+php artisan demo:purge          # юу устахыг харуулж, баталгаажуулалт асууна
+php artisan demo:purge --force  # асуулгүй
+```
+
+`demo:purge` нь ЗӨВХӨН `is_demo` тугтай мөрийг устгана. Нэрээр, кодоор хайдаггүй
+нь санаатай: demo компани «Инэл ХХК» гэж нэрлэгдсэн бөгөөд тэр нь жинхэнэ
+захиалагчийн нэр тул нэрээр хайвал жинхэнэ өгөгдөл устах эрсдэлтэй.
+
+| Устана | Үлдэнэ |
+|---|---|
+| Demo төсөл → блок, байршил, ажлын нэгж, явц, шалгалт, саатал, зураг (cascade) | Ажлын төрөл, бүлэг (47/15) |
+| Demo хэрэглэгч (4), demo гүйцэтгэгч (6) | Чанарын шалгах хуудас (5) |
+| Зургийн файлууд дискнээс | Зураг төслийн загвар (3) |
+| | Компанийн бүртгэл |
+
+**Анхаар:** тугийг `DemoSeeder` тавьдаг. Энэ өөрчлөлтөөс ӨМНӨ гараар үүсгэсэн
+өгөгдөл туггүй тул `demo:purge` түүнд хүрэхгүй — шаардвал гараар устгана.
+
+### Жишээ зургийг жинхэнээр солих
+
+`database/seeders/demo-photos/` доторх файлыг сольж, `demo:purge` хийгээд дахин
+seed хийнэ. Seeder нь хавтсыг уншдаг тул `.jpg`, `.png`, `.webp` аль нь ч болно.
+
+## Загварын гол зарчим
+
+**Ажлын төрөл × байршил = ажлын нэгж.** `work_types` (юу хийх) ба `locations`
+(хаана хийх) тусдаа. Тэдний огтлолцол нь `work_items`. Ажлын төрөл бүр өөрт
+тохирох түвшинд суудаг (`level`): дээвэр блокт нэг, угсралт давхар бүрт, паркет
+айл бүрт. Нэг 16 давхрын блокт ~3,290 мөр гарна.
+
+**Тоо хэмжээ нь эх сурвалж.** `planned_qty` → `reported_qty` (гүйцэтгэгч мэдээлсэн)
+→ `accepted_qty` (хяналтын инженер баталсан). Үлдэгдэл ба хувь нь **зөвхөн
+батлагдсанаас** бодогдоно.
+
+**Хуримтлагдсан дүн `work_items`-д хадгалагдана.** `reported_qty`/`accepted_qty`-г
+жагсаалт бүрд `progress_entries`-ээс дахин бодох нь N+1 болно. Тиймээс явц эсвэл
+шалгалт нэмэгдэх бүрд transaction дотор шинэчилнэ (`WorkItem::recalculate`).
+
+**Алдааны дугтуй нэг маягтай.** `bootstrap/app.php` доторх exception handler
+бүх API алдааг `{ error: { name, message, details } }` болгож хувиргана.
+Laravel-ийн анхдагч хэлбэр frontend-д ойлгогдохгүй тул хэрэглэгчид
+"Request failed (422)" гэсэн утгагүй мессеж харагддаг байв.
+
+**Байршил нь materialized path.** `path_key` = `/uuid/uuid/uuid`. Удмыг олоход
+рекурс хэрэггүй, `where path_key like '/root/floor/%'` гэсэн ганц индекстэй
+query болно.
+
+## Юу орсон, юу дутуу
+
+| Орсон | Дутуу (дараагийн үе шат) |
+|---|---|
+| Блок, байршил, ажлын төрөл, WorkItem | Материал, орц норм, агуулах |
+| Явц бүртгэх, хоёр шатны шалгалт, rework | Тохирооны хуудас, үнэ, акт |
+| Сервер талын нэгтгэл (`summary`, `dashboard`) | Мэдэгдэл, push |
+| Загвар буулгах queued job | Excel импорт (одоогоор seeder) |
+| Зургийн баримт — хавсаргах, харах, түгжих | Зургийг сервер талд багасгах |
+| Sanctum + гүйцэтгэгчийн кодоор нэвтрэх | Бүрэн эрхийн matrix, audit log |
+
+## Тест
+
+```bash
+php artisan test
+```
+
+`cpms-web/scripts/verify-mock.ts` доторх 46 шалгалтын гол хэсгийг PHPUnit болгож
+хөрвүүлсэн — хуудаслалт, удмаар шүүх, нэгтгэлийн нийлбэр, тоо хэмжээний валидаци,
+блокууд хоорондоо холилдохгүй байх.

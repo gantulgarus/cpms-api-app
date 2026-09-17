@@ -13,12 +13,12 @@ class Project extends Model
 
     protected $fillable = [
         'company_id', 'name', 'code', 'description', 'location',
-        'start_date', 'end_date', 'status',
+        'start_date', 'end_date', 'status', 'is_demo',
     ];
 
     protected function casts(): array
     {
-        return ['start_date' => 'date', 'end_date' => 'date'];
+        return ['start_date' => 'date', 'end_date' => 'date', 'is_demo' => 'boolean'];
     }
 
     public function company(): BelongsTo
