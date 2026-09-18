@@ -77,7 +77,7 @@
     "name": "Цонх суулгалт-Энгийн",
     "unit": "ш",
     "level": "unit",
-    "plannedQty": 43.6,
+    "plannedQty": 3,
     "estimated": true
   },
   {
@@ -86,7 +86,7 @@
     "name": "Цонх суулгалт-Хаалгатай",
     "unit": "ш",
     "level": "unit",
-    "plannedQty": 43.6,
+    "plannedQty": 1,
     "estimated": true
   },
   {
@@ -338,7 +338,7 @@
     "name": "Айлийн гадна төмөр хаалга",
     "unit": "ш",
     "level": "unit",
-    "plannedQty": 43.6,
+    "plannedQty": 1,
     "estimated": true
   },
   {
@@ -347,7 +347,7 @@
     "name": "Гадна металл шилэн хаалга",
     "unit": "ш",
     "level": "block",
-    "plannedQty": 650.0,
+    "plannedQty": 2,
     "estimated": true
   },
   {
@@ -356,7 +356,7 @@
     "name": "Шатны хонгилын галын хаалга",
     "unit": "ш",
     "level": "floor",
-    "plannedQty": 648.0,
+    "plannedQty": 2,
     "estimated": true
   },
   {
@@ -365,7 +365,7 @@
     "name": "Гадна металл хаалга",
     "unit": "ш",
     "level": "block",
-    "plannedQty": 650.0,
+    "plannedQty": 3,
     "estimated": true
   },
   {
@@ -374,7 +374,7 @@
     "name": "Грашийн автомат хаалга",
     "unit": "ш",
     "level": "block",
-    "plannedQty": 650.0,
+    "plannedQty": 1,
     "estimated": true
   },
   {
@@ -383,7 +383,7 @@
     "name": "Айлын дотор модон хаалга",
     "unit": "ш",
     "level": "unit",
-    "plannedQty": 43.6,
+    "plannedQty": 4,
     "estimated": true
   },
   {

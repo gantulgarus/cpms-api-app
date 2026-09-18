@@ -106,6 +106,8 @@ class DashboardController extends Controller
              * түүнийг хэрэглэдэг тул хоёр дэлгэц хэзээ ч зөрөхгүй.
              */
             ->selectRaw('sum('.WorkItem::progressSql('wi').') as progress_sum')
+            // Хувийн ХУВААРЬ — тоо хэмжээгүй мөр үүнд ороогүй.
+            ->selectRaw('sum('.WorkItem::measurableSql('wi').') as measurable_items')
             ->selectRaw("sum(case when wi.review_state = 'pending' then 1 else 0 end) as pending")
             ->selectRaw(
                 "sum(case when wi.status <> 'completed' and wi.planned_end_date < ? then 1 else 0 end) as overdue",
@@ -122,6 +124,7 @@ class DashboardController extends Controller
         $completedItems = (int) $rows->sum(fn ($r) => (int) $r->completed_items);
         $inProgressItems = (int) $rows->sum(fn ($r) => (int) $r->in_progress_items);
         $progressSum = (float) $rows->sum(fn ($r) => (float) $r->progress_sum);
+        $measurableItems = (int) $rows->sum(fn ($r) => (int) $r->measurable_items);
 
         return response()->json([
             'data' => [
@@ -132,9 +135,17 @@ class DashboardController extends Controller
                  * м², м³, ширхгийг нийлүүлдэг тул ширхгээр хэмжигддэг ажил
                  * руу татагдана. Дундаж нь мөр бүрийг ижил жинтэй болгоно.
                  */
-                'percentage' => $totalItems > 0
-                    ? (int) round($progressSum / $totalItems * 100)
+                'percentage' => $measurableItems > 0
+                    ? (int) round($progressSum / $measurableItems * 100)
                     : 0,
+                /*
+                 * Тоо хэмжээ нь бүртгэгдээгүй ажлын тоо.
+                 *
+                 * Эдгээр нь `notStartedItems`-ийн ДОТОР байна — тусдаа бүлэг
+                 * биш, харин «яагаад эхлээгүй вэ» гэсэн асуултын хариулт.
+                 * Гүйцэтгэл оруулах боломжгүй тул хувьд ч ороогүй.
+                 */
+                'unmeasuredItems' => max($totalItems - $measurableItems, 0),
                 'totalItems' => $totalItems,
                 'completedItems' => $completedItems,
                 'inProgressItems' => $inProgressItems,
@@ -147,9 +158,13 @@ class DashboardController extends Controller
                 'blocks' => $rows->map(fn ($r) => [
                     'id' => $r->id,
                     'name' => $r->name,
-                    'percentage' => (int) $r->total_items > 0
-                        ? (int) round((float) $r->progress_sum / (int) $r->total_items * 100)
+                    'percentage' => (int) $r->measurable_items > 0
+                        ? (int) round((float) $r->progress_sum / (int) $r->measurable_items * 100)
                         : 0,
+                    'unmeasuredItems' => max(
+                        (int) $r->total_items - (int) $r->measurable_items,
+                        0
+                    ),
                     'totalItems' => (int) $r->total_items,
                     'completedItems' => (int) $r->completed_items,
                     'inProgressItems' => (int) $r->in_progress_items,

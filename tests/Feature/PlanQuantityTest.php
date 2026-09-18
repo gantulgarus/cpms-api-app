@@ -278,6 +278,52 @@ class PlanQuantityTest extends TestCase
             ->assertOk();
     }
 
+    /**
+     * Тоо хэмжээгүй ажил ХУВИЙН БОДОЛТОД ОРОХГҮЙ.
+     *
+     * Хавсралт-2-ын 47 төрлөөс 30 нь тоо хэмжээгүй тул нэг блокийн мөрүүдийн
+     * ~58% нь `planned_qty = 0` болж үүсдэг. Тэдгээрийг «0% хийгдсэн» гэж
+     * тоолвол блокийн хувь мөнхөд 42%-иас хэтрэхгүй болно — тоо хэмжээ нь
+     * бүртгэгдэх хүртэл хэзээ ч зөв болохгүй гэсэн үг.
+     *
+     * Зөв уншилт нь «хэмжих боломжгүй», «хийгдээгүй» БИШ.
+     */
+    public function test_rows_without_a_quantity_stay_out_of_the_percentage(): void
+    {
+        // Тоо хэмжээгүй мөрийг ЗОРИУД үүсгэнэ — seeder одоо мөр бүрд тоо
+        // өгдөг. Бодит амьдрал дээр ийм мөр гэрээний өөрчлөлтөөс гардаг.
+        $unmeasured = $this->zeroItems()->count();
+        $this->assertGreaterThan(0, $unmeasured, 'Тоо хэмжээгүй мөр байх ёстой.');
+
+        $measurable = WorkItem::where('block_id', $this->block->id)
+            ->where('planned_qty', '>', 0)
+            ->get();
+
+        // Хэмжигдэх БҮХ мөрийг бүрэн батлуулна → хувь нь 100 байх ёстой,
+        // тоо хэмжээгүй мөрүүд байсан ч.
+        foreach ($measurable as $item) {
+            $item->update(['accepted_qty' => $item->planned_qty, 'status' => 'completed']);
+        }
+
+        $totals = $this->actingAs($this->manager, 'sanctum')
+            ->getJson("/api/v1/blocks/{$this->block->id}/summary")
+            ->assertOk()
+            ->json('data.totals');
+
+        $this->assertSame(100, $totals['percentage']);
+        $this->assertSame($unmeasured, $totals['unmeasuredItems']);
+    }
+
+    public function test_unmeasured_rows_are_never_counted_as_completed(): void
+    {
+        // `accepted_qty (0) >= planned_qty (0)` гэсэн харьцуулалт өөрөө үнэн
+        // тул хамгаалалтгүй бол ХИЙГДЭЭГҮЙ ажил «дууссан» гэж тоологдоно.
+        $item = $this->zeroItems()->first();
+        $item->recalculate();
+
+        $this->assertSame('not_started', $item->refresh()->status);
+    }
+
     public function test_status_is_recalculated_after_the_quantity_changes(): void
     {
         $item = $this->zeroItems()->first();
