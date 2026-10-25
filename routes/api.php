@@ -27,10 +27,11 @@ use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
-| CPMS API v1 (загвар v2)
+| CPMS API
 |--------------------------------------------------------------------------
-| Зам нь `cpms-web/docs/api-v2-endpoints.md`-тэй яг таарна. Frontend нь
-| `/api/v1/*` рүү хандана — proxy дамжуулна.
+| Зам нь `cpms-web/docs/api-endpoints.md`-тэй яг таарна. Frontend нь
+| `/api/v1/*` рүү хандана — proxy дамжуулна. `v1` нь зөвхөн URL-ийн
+| угтвар (гар утасны апп ч үүгээр ханддаг), өөр хувилбар байхгүй.
 */
 
 Route::prefix('v1')->group(function () {
@@ -73,7 +74,9 @@ Route::prefix('v1')->group(function () {
         Route::delete('contractors/{contractor}/access-code', [ContractorController::class, 'revokeAccessCode']);
 
         // --- Төсөл ---
+        Route::get('companies', [ProjectController::class, 'companies']);
         Route::get('projects', [ProjectController::class, 'index']);
+        Route::post('projects', [ProjectController::class, 'store']);
         Route::get('projects/{project}', [ProjectController::class, 'show']);
         Route::get('projects/{project}/blocks', [BlockController::class, 'index']);
         Route::post('projects/{project}/blocks', [BlockController::class, 'store']);

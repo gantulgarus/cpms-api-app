@@ -123,6 +123,17 @@ class User extends Authenticatable
         return in_array($this->role, ['admin', 'general_engineer', 'project_manager'], true);
     }
 
+    /**
+     * Төсөл (ба захиалагч компани) үүсгэх эрх.
+     *
+     * ЗӨВХӨН АДМИН: төсөл бол бүх блок, ажлын эх — шинэ төсөл нээх нь
+     * өдөр тутмын ажил биш, системийн тохиргоо.
+     */
+    public function canManageProjects(): bool
+    {
+        return $this->role === 'admin';
+    }
+
     /** Гүйцэтгэгч бүртгэх, нэвтрэх код олгох эрх. */
     public function canManageContractors(): bool
     {

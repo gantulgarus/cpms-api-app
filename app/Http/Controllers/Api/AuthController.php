@@ -109,6 +109,7 @@ class AuthController extends Controller
                     true,
                 ),
                 'canManageUsers' => $user->canManageUsers(),
+                'canManageProjects' => $user->canManageProjects(),
                 'canManageReferenceData' => $user->canManageReferenceData(),
                 'canEditPlan' => $user->canEditPlan(),
                 /*
