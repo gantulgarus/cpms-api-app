@@ -30,9 +30,18 @@ class QueueController extends Controller
     /**
      * GET /projects/{project}/queue
      *
-     * `type=inspection` — батлахыг хүлээж буй (анхдагч)
+     * `type=inspection` — ямар нэг шатыг хүлээж буй (анхдагч)
+     * `type=check`      — 1-р шат: талбайн инженер шалгахыг хүлээж буй
+     * `type=approval`   — 2-р шат: хяналтын инженер батлахыг хүлээж буй
      * `type=returned`   — буцаагдсан, дахин хийх шаардлагатай
      * `type=overdue`    — хугацаа хэтэрсэн
+     *
+     * `blockId` — НЭГ блокоор шүүнэ.
+     *
+     * ЯАГААД ХЭРЭГТЭЙ ВЭ: 75 барилгын цогцолборт бүх блокийн ажил нэг
+     * жагсаалтад холилдоно. «Өнөөдөр юу батлах вэ» гэдэгт блок хамаагүй
+     * нь ҮНЭН, харин «А1 рүү явж байгаа тул А1-ийнхээ ажлыг нэг дор
+     * дуусгая» гэдэг нь бас үнэн — хоёулаа хэрэгтэй.
      */
     public function index(Request $request, Project $project): WorkItemCollection
     {
@@ -44,12 +53,26 @@ class QueueController extends Controller
 
         $this->scope->workItems($query, $request->user());
 
+        if ($blockId = $request->query('blockId')) {
+            $query->where('block_id', $blockId);
+        }
+
+        /*
+         * Хоёр шат болсон тул «батлахыг хүлээж буй» нь ХЭНИЙГ хүлээж байгаагаас
+         * хамаарч хоёр өөр дараалал.
+         *
+         * Талбайн инженер ба хяналтын инженер НЭГ жагсаалт хуваалцвал
+         * хоёулаа 3,711 мөрийг шүүж өөрийнхийг хайх болно — дараалал гэдэг
+         * үгийн утга нь тэр хайлтыг арилгах байсан.
+         */
         match ($type) {
-            'returned' => $query->where('review_state', 'returned'),
+            'check' => $query->where('review_state', 'pending_check'),
+            'approval' => $query->where('review_state', 'pending_approval'),
+            'returned' => $query->whereIn('review_state', WorkItem::RETURNED_STATES),
             'overdue' => $query
                 ->where('status', '!=', 'completed')
                 ->whereDate('planned_end_date', '<', now()->toDateString()),
-            default => $query->where('review_state', 'pending'),
+            default => $query->whereIn('review_state', WorkItem::PENDING_STATES),
         };
 
         // Хамгийн удаан хүлээсэн нь дээр — хүлээлт нь дараалалд орох шалгуур.
@@ -74,9 +97,17 @@ class QueueController extends Controller
 
         $this->scope->rawWorkItems($query, $request->user());
 
+        // Тоонууд нь жагсаалттай ИЖИЛ шүүлтүүрийг дагана — эс бөгөөс
+        // таб дээр «12» гэж бичигдээд жагсаалтад 3 мөр гарна.
+        if ($blockId = $request->query('blockId')) {
+            $query->where('wi.block_id', $blockId);
+        }
+
         $row = $query
-            ->selectRaw("sum(case when wi.review_state = 'pending' then 1 else 0 end) as inspection")
-            ->selectRaw("sum(case when wi.review_state = 'returned' then 1 else 0 end) as returned")
+            ->selectRaw('sum('.WorkItem::pendingSql('wi').') as inspection')
+            ->selectRaw("sum(case when wi.review_state = 'pending_check' then 1 else 0 end) as check_stage")
+            ->selectRaw("sum(case when wi.review_state = 'pending_approval' then 1 else 0 end) as approval_stage")
+            ->selectRaw('sum('.WorkItem::returnedSql('wi').') as returned')
             ->selectRaw(
                 "sum(case when wi.status <> 'completed' and wi.planned_end_date < ? then 1 else 0 end) as overdue",
                 [now()->toDateString()]
@@ -86,6 +117,9 @@ class QueueController extends Controller
         return response()->json([
             'data' => [
                 'inspection' => (int) ($row->inspection ?? 0),
+                // Шат тус бүрийн тоо — таб дээр «та батлах 12» гэж харуулна.
+                'check' => (int) ($row->check_stage ?? 0),
+                'approval' => (int) ($row->approval_stage ?? 0),
                 'returned' => (int) ($row->returned ?? 0),
                 'overdue' => (int) ($row->overdue ?? 0),
             ],

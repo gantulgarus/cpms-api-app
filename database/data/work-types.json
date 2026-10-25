@@ -5,8 +5,10 @@
     "name": "Газар шорооны ажил",
     "unit": "м3",
     "level": "block",
-    "plannedQty": 3129.84,
-    "estimated": false
+    "plannedQty": 3110.4,
+    "estimated": false,
+    "code": "1.2",
+    "codePart": null
   },
   {
     "no": 2,
@@ -14,8 +16,11 @@
     "name": "суурь угсралтын ажил",
     "unit": "м2",
     "level": "block",
-    "plannedQty": 767.24,
-    "estimated": false
+    "plannedQty": 767.52,
+    "estimated": false,
+    "code": "2.6.1",
+    "codePart": null,
+    "holdPoint": true
   },
   {
     "no": 3,
@@ -24,7 +29,10 @@
     "unit": "м2",
     "level": "floor",
     "plannedQty": 648.0,
-    "estimated": false
+    "estimated": false,
+    "code": "2.6.2",
+    "codePart": null,
+    "holdPoint": true
   },
   {
     "no": 4,
@@ -32,8 +40,10 @@
     "name": "парпет угсралтын ажил",
     "unit": "м2",
     "level": "block",
-    "plannedQty": 225.68,
-    "estimated": false
+    "plannedQty": 712.8,
+    "estimated": false,
+    "code": "2.6.4",
+    "codePart": null
   },
   {
     "no": 5,
@@ -42,7 +52,9 @@
     "unit": "м2",
     "level": "block",
     "plannedQty": 648.0,
-    "estimated": false
+    "estimated": false,
+    "code": "3.2.1",
+    "codePart": null
   },
   {
     "no": 6,
@@ -50,8 +62,10 @@
     "name": "блокон өрлөг",
     "unit": "м2",
     "level": "floor",
-    "plannedQty": 648.0,
-    "estimated": true
+    "plannedQty": 80.486,
+    "estimated": false,
+    "code": "4.1.7",
+    "codePart": null
   },
   {
     "no": 7,
@@ -59,8 +73,10 @@
     "name": "Тоосгон өрлөг-Үндсэн",
     "unit": "м2",
     "level": "floor",
-    "plannedQty": 648.0,
-    "estimated": true
+    "plannedQty": 134.481,
+    "estimated": false,
+    "code": "4.2.9",
+    "codePart": null
   },
   {
     "no": 8,
@@ -68,8 +84,10 @@
     "name": "Тоосгон өрлөг-Шахт",
     "unit": "м2",
     "level": "floor",
-    "plannedQty": 648.0,
-    "estimated": true
+    "plannedQty": 111.905,
+    "estimated": false,
+    "code": "4.3.7",
+    "codePart": null
   },
   {
     "no": 9,
@@ -77,8 +95,10 @@
     "name": "Цонх суулгалт-Энгийн",
     "unit": "ш",
     "level": "unit",
-    "plannedQty": 3,
-    "estimated": true
+    "plannedQty": 2.778,
+    "estimated": false,
+    "code": "5.5",
+    "codePart": null
   },
   {
     "no": 10,
@@ -87,7 +107,9 @@
     "unit": "ш",
     "level": "unit",
     "plannedQty": 1,
-    "estimated": true
+    "estimated": true,
+    "code": null,
+    "codePart": null
   },
   {
     "no": 11,
@@ -95,8 +117,10 @@
     "name": "чулуун фасад",
     "unit": "м2",
     "level": "floor",
-    "plannedQty": 648.0,
-    "estimated": true
+    "plannedQty": 15.02,
+    "estimated": false,
+    "code": "6.4",
+    "codePart": null
   },
   {
     "no": 12,
@@ -104,8 +128,10 @@
     "name": "метал фасад",
     "unit": "м2",
     "level": "floor",
-    "plannedQty": 648.0,
-    "estimated": true
+    "plannedQty": 234.133,
+    "estimated": false,
+    "code": "6.6",
+    "codePart": null
   },
   {
     "no": 13,
@@ -113,8 +139,10 @@
     "name": "шилэн фасад",
     "unit": "м2",
     "level": "floor",
-    "plannedQty": 648.0,
-    "estimated": true
+    "plannedQty": 96,
+    "estimated": false,
+    "code": "6.8",
+    "codePart": null
   },
   {
     "no": 14,
@@ -122,8 +150,11 @@
     "name": "Цахилгааны ажил",
     "unit": "м2",
     "level": "floor",
-    "plannedQty": 648.0,
-    "estimated": true
+    "plannedQty": 654.829,
+    "estimated": false,
+    "code": "7.2",
+    "codePart": null,
+    "holdPoint": true
   },
   {
     "no": 15,
@@ -131,8 +162,11 @@
     "name": "Сантехникын ажил",
     "unit": "м2",
     "level": "floor",
-    "plannedQty": 648.0,
-    "estimated": true
+    "plannedQty": 654.829,
+    "estimated": false,
+    "code": "9.2",
+    "codePart": null,
+    "holdPoint": true
   },
   {
     "no": 16,
@@ -140,8 +174,11 @@
     "name": "Агааржуулалтын ажил",
     "unit": "м2",
     "level": "floor",
-    "plannedQty": 648.0,
-    "estimated": true
+    "plannedQty": 654.829,
+    "estimated": false,
+    "code": "10.2",
+    "codePart": null,
+    "holdPoint": true
   },
   {
     "no": 17,
@@ -149,8 +186,9 @@
     "name": "Хар шалны ажил",
     "unit": "м2",
     "level": "unit",
-    "plannedQty": 552.75,
-    "estimated": false
+    "plannedQty": 483.61,
+    "estimated": false,
+    "code": "12.7.1"
   },
   {
     "no": 18,
@@ -158,8 +196,10 @@
     "name": "паркетан шалны ажил",
     "unit": "м2",
     "level": "unit",
-    "plannedQty": 390.72,
-    "estimated": false
+    "plannedQty": 50.924,
+    "estimated": false,
+    "code": "12.9",
+    "codePart": null
   },
   {
     "no": 19,
@@ -167,8 +207,10 @@
     "name": "Нийтийн эдэлбэрийн  чулууны ажил",
     "unit": "м2",
     "level": "floor",
-    "plannedQty": 87.29,
-    "estimated": false
+    "plannedQty": 4.492,
+    "estimated": false,
+    "code": "13.19",
+    "codePart": null
   },
   {
     "no": 20,
@@ -176,8 +218,10 @@
     "name": "Шатны хонгилын чулууны ажил",
     "unit": "м2",
     "level": "floor",
-    "plannedQty": 16.95,
-    "estimated": false
+    "plannedQty": 12.424,
+    "estimated": false,
+    "code": "13.21",
+    "codePart": null
   },
   {
     "no": 21,
@@ -185,8 +229,10 @@
     "name": "Тагтны босгоны чулууны ажил",
     "unit": "м2",
     "level": "unit",
-    "plannedQty": 3.07,
-    "estimated": false
+    "plannedQty": 0.329,
+    "estimated": false,
+    "code": "13.22",
+    "codePart": null
   },
   {
     "no": 22,
@@ -194,8 +240,10 @@
     "name": "Цонхны тавцангийн чулууны ажил",
     "unit": "м2",
     "level": "unit",
-    "plannedQty": 2.24,
-    "estimated": false
+    "plannedQty": 0.836,
+    "estimated": false,
+    "code": "13.23",
+    "codePart": null
   },
   {
     "no": 23,
@@ -203,8 +251,11 @@
     "name": "гипсэн хана угсралтын ажил",
     "unit": "м2",
     "level": "floor",
-    "plannedQty": 648.0,
-    "estimated": true
+    "plannedQty": 109.249,
+    "estimated": false,
+    "code": "15.14",
+    "codePart": null,
+    "holdPoint": true
   },
   {
     "no": 24,
@@ -212,8 +263,10 @@
     "name": "Шавардлага-Бетон",
     "unit": "м2",
     "level": "unit",
-    "plannedQty": 43.6,
-    "estimated": true
+    "plannedQty": 74.696,
+    "estimated": false,
+    "code": "16.1.1.4",
+    "codePart": null
   },
   {
     "no": 25,
@@ -222,7 +275,9 @@
     "unit": "м2",
     "level": "unit",
     "plannedQty": 43.6,
-    "estimated": true
+    "estimated": true,
+    "code": null,
+    "codePart": null
   },
   {
     "no": 26,
@@ -231,7 +286,9 @@
     "unit": "м2",
     "level": "unit",
     "plannedQty": 43.6,
-    "estimated": true
+    "estimated": true,
+    "code": null,
+    "codePart": null
   },
   {
     "no": 27,
@@ -239,8 +296,10 @@
     "name": "хананы замаска",
     "unit": "м2",
     "level": "unit",
-    "plannedQty": 43.6,
-    "estimated": true
+    "plannedQty": 161.946,
+    "estimated": false,
+    "code": "16.2.1.4",
+    "codePart": null
   },
   {
     "no": 28,
@@ -248,8 +307,10 @@
     "name": "таазны замаска",
     "unit": "м2",
     "level": "unit",
-    "plannedQty": 596.31,
-    "estimated": false
+    "plannedQty": 69.954,
+    "estimated": false,
+    "code": "16.2.2.4",
+    "codePart": null
   },
   {
     "no": 29,
@@ -257,8 +318,10 @@
     "name": "хананы эмульс",
     "unit": "м2",
     "level": "unit",
-    "plannedQty": 43.6,
-    "estimated": true
+    "plannedQty": 50.011,
+    "estimated": false,
+    "code": "16.3.1.4",
+    "codePart": null
   },
   {
     "no": 30,
@@ -266,8 +329,10 @@
     "name": "таазны эмульс",
     "unit": "м2",
     "level": "unit",
-    "plannedQty": 596.31,
-    "estimated": false
+    "plannedQty": 69.954,
+    "estimated": false,
+    "code": "16.3.2.4",
+    "codePart": null
   },
   {
     "no": 31,
@@ -276,7 +341,9 @@
     "unit": "м2",
     "level": "unit",
     "plannedQty": 41.68,
-    "estimated": false
+    "estimated": false,
+    "code": "17.1.6",
+    "codePart": "Айлын 00 өрөө шал"
   },
   {
     "no": 32,
@@ -285,7 +352,9 @@
     "unit": "м2",
     "level": "unit",
     "plannedQty": 26.21,
-    "estimated": false
+    "estimated": false,
+    "code": "17.1.6",
+    "codePart": "Айлын үүд хэсэгт"
   },
   {
     "no": 33,
@@ -294,7 +363,9 @@
     "unit": "м2",
     "level": "unit",
     "plannedQty": 29.33,
-    "estimated": false
+    "estimated": false,
+    "code": "17.1.6",
+    "codePart": "Айлын тагт"
   },
   {
     "no": 34,
@@ -303,7 +374,9 @@
     "unit": "м2",
     "level": "floor",
     "plannedQty": 73.26,
-    "estimated": false
+    "estimated": false,
+    "code": "17.1.6",
+    "codePart": "Нийтийн эдэлбэр"
   },
   {
     "no": 35,
@@ -312,7 +385,9 @@
     "unit": "м2",
     "level": "unit",
     "plannedQty": 43.6,
-    "estimated": true
+    "estimated": true,
+    "code": "17.1.6",
+    "codePart": "Айлын 00 өрөө хана"
   },
   {
     "no": 36,
@@ -320,8 +395,10 @@
     "name": "обой наах ажил",
     "unit": "м2",
     "level": "unit",
-    "plannedQty": 43.6,
-    "estimated": true
+    "plannedQty": 148.428,
+    "estimated": false,
+    "code": "16.4.6",
+    "codePart": null
   },
   {
     "no": 37,
@@ -329,8 +406,10 @@
     "name": "ханын хавтан наах ажил",
     "unit": "м2",
     "level": "unit",
-    "plannedQty": 43.6,
-    "estimated": true
+    "plannedQty": 2.58,
+    "estimated": false,
+    "code": "16.5.5",
+    "codePart": null
   },
   {
     "no": 38,
@@ -339,7 +418,9 @@
     "unit": "ш",
     "level": "unit",
     "plannedQty": 1,
-    "estimated": true
+    "estimated": true,
+    "code": null,
+    "codePart": null
   },
   {
     "no": 39,
@@ -348,7 +429,9 @@
     "unit": "ш",
     "level": "block",
     "plannedQty": 2,
-    "estimated": true
+    "estimated": true,
+    "code": null,
+    "codePart": null
   },
   {
     "no": 40,
@@ -357,7 +440,9 @@
     "unit": "ш",
     "level": "floor",
     "plannedQty": 2,
-    "estimated": true
+    "estimated": true,
+    "code": null,
+    "codePart": null
   },
   {
     "no": 41,
@@ -366,7 +451,9 @@
     "unit": "ш",
     "level": "block",
     "plannedQty": 3,
-    "estimated": true
+    "estimated": true,
+    "code": null,
+    "codePart": null
   },
   {
     "no": 42,
@@ -375,7 +462,9 @@
     "unit": "ш",
     "level": "block",
     "plannedQty": 1,
-    "estimated": true
+    "estimated": true,
+    "code": null,
+    "codePart": null
   },
   {
     "no": 43,
@@ -384,7 +473,9 @@
     "unit": "ш",
     "level": "unit",
     "plannedQty": 4,
-    "estimated": true
+    "estimated": true,
+    "code": null,
+    "codePart": null
   },
   {
     "no": 44,
@@ -392,8 +483,10 @@
     "name": "Довжооны ажил",
     "unit": "м2",
     "level": "block",
-    "plannedQty": 650.0,
-    "estimated": true
+    "plannedQty": 253.36,
+    "estimated": false,
+    "code": "19.14",
+    "codePart": null
   },
   {
     "no": 45,
@@ -401,8 +494,10 @@
     "name": "Пандусны ажил",
     "unit": "м2",
     "level": "block",
-    "plannedQty": 650.0,
-    "estimated": true
+    "plannedQty": 82.5,
+    "estimated": false,
+    "code": "19.15",
+    "codePart": null
   },
   {
     "no": 46,
@@ -410,8 +505,10 @@
     "name": "хаявч цутгах ажил",
     "unit": "м2",
     "level": "block",
-    "plannedQty": 650.0,
-    "estimated": true
+    "plannedQty": 100.53,
+    "estimated": false,
+    "code": "19.16",
+    "codePart": null
   },
   {
     "no": 47,
@@ -419,7 +516,131 @@
     "name": "Тохижилтын ажил",
     "unit": "м2",
     "level": "block",
-    "plannedQty": 650.0,
-    "estimated": true
+    "plannedQty": 120,
+    "estimated": false,
+    "code": "19.17",
+    "codePart": null
+  },
+  {
+    "no": 48,
+    "group": "Угсралт",
+    "name": "Техникийн давхрын угсралтын ажил",
+    "unit": "м2",
+    "level": "block",
+    "plannedQty": 116.1,
+    "estimated": false,
+    "code": "2.6.3",
+    "codePart": null,
+    "holdPoint": true
+  },
+  {
+    "no": 49,
+    "group": "цахилгаан",
+    "name": "Цахилгаан лифтний угсралт",
+    "unit": "ш",
+    "level": "block",
+    "plannedQty": 34.0,
+    "estimated": false,
+    "code": "11.2",
+    "codePart": null
+  },
+  {
+    "no": 50,
+    "group": "холбоо",
+    "name": "Холбоо дохиоллын ажил",
+    "unit": "м2",
+    "level": "floor",
+    "plannedQty": 654.829,
+    "estimated": false,
+    "code": "8.2",
+    "codePart": null
+  },
+  {
+    "no": 51,
+    "group": "чулуу",
+    "name": "Шатны бариул",
+    "unit": "м",
+    "level": "block",
+    "plannedQty": 126.0,
+    "estimated": false,
+    "code": "14.5",
+    "codePart": null
+  },
+  {
+    "no": 52,
+    "group": "Засал",
+    "name": "Зүлгүүр-Хана",
+    "unit": "м2",
+    "level": "unit",
+    "plannedQty": 162.57,
+    "estimated": false,
+    "code": "16.2.1.5",
+    "codePart": null
+  },
+  {
+    "no": 53,
+    "group": "Засал",
+    "name": "Зүлгүүр-Тааз",
+    "unit": "м2",
+    "level": "unit",
+    "plannedQty": 69.954,
+    "estimated": false,
+    "code": "16.2.2.5",
+    "codePart": null
+  },
+  {
+    "no": 54,
+    "group": "Гадна ажил",
+    "name": "Явган зам",
+    "unit": "м2",
+    "level": "block",
+    "plannedQty": 120.0,
+    "estimated": false,
+    "code": "19.17",
+    "codePart": null
+  },
+  {
+    "no": 55,
+    "group": "Гадна ажил",
+    "name": "Авто зам, зогсоол",
+    "unit": "м2",
+    "level": "block",
+    "plannedQty": 525.0,
+    "estimated": false,
+    "code": "19.18",
+    "codePart": null
+  },
+  {
+    "no": 56,
+    "group": "Гадна ажил",
+    "name": "Тоглоомын талбай",
+    "unit": "м2",
+    "level": "block",
+    "plannedQty": 124.0,
+    "estimated": false,
+    "code": "19.19",
+    "codePart": null
+  },
+  {
+    "no": 57,
+    "group": "Ногоон байгууламж",
+    "name": "Зүлэгжүүлэлтийн ажил",
+    "unit": "м2",
+    "level": "block",
+    "plannedQty": 175.0,
+    "estimated": false,
+    "code": "20.4",
+    "codePart": null
+  },
+  {
+    "no": 58,
+    "group": "Ногоон байгууламж",
+    "name": "Мод суулгалтын ажил",
+    "unit": "м2",
+    "level": "block",
+    "plannedQty": 20.0,
+    "estimated": false,
+    "code": "20.3",
+    "codePart": null
   }
 ]

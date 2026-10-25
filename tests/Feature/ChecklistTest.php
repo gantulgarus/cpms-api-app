@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Jobs\ApplyBlockDesign;
+use App\Models\Inspection;
 use App\Models\Block;
 use App\Models\BlockDesign;
 use App\Models\ChecklistTemplate;
@@ -41,6 +42,17 @@ class ChecklistTest extends TestCase
         parent::setUp();
 
         $this->seed(WorkTypeSeeder::class);
+
+        /*
+         * Эдгээр тест нь каскадын тухай БИШ — чанарын хуудас, тоо хэмжээ,
+         * дараалал, хамрах хүрээний тухай. Тиймээс ажлын төрлийг НЭГ
+         * шаттай болгоно: хоёр шатыг дамжуулбал тест бүр каскадтай
+         * холбогдож, шатны дүрэм өөрчлөгдөх бүрд 25 тест зэрэг унана —
+         * яг тэр болсон.
+         *
+         * Каскадыг `TwoStageInspectionTest` шалгана.
+         */
+        WorkType::query()->update(['inspection_stages' => 1]);
 
         $company = Company::create(['name' => 'Инэл ХХК']);
         /** @var Project $project */
@@ -135,7 +147,7 @@ class ChecklistTest extends TestCase
 
         $this->actingAs($this->inspector, 'sanctum')
             ->postJson("/api/v1/work-items/{$item->id}/inspections", [
-                'stage' => 'client',
+                'stage' => Inspection::STAGE_FINAL,
                 'result' => 'accepted',
                 'acceptedQty' => 5,
             ])
@@ -152,7 +164,7 @@ class ChecklistTest extends TestCase
 
         $this->actingAs($this->inspector, 'sanctum')
             ->postJson("/api/v1/work-items/{$item->id}/inspections", [
-                'stage' => 'client',
+                'stage' => Inspection::STAGE_FINAL,
                 'result' => 'accepted',
                 'acceptedQty' => 5,
                 'checklist' => [['itemId' => $this->template->items[0]->id, 'result' => 'pass']],
@@ -166,7 +178,7 @@ class ChecklistTest extends TestCase
 
         $this->actingAs($this->inspector, 'sanctum')
             ->postJson("/api/v1/work-items/{$item->id}/inspections", [
-                'stage' => 'client',
+                'stage' => Inspection::STAGE_FINAL,
                 'result' => 'accepted',
                 'acceptedQty' => 5,
                 'checklist' => $this->answers('pass', 'fail'),
@@ -182,7 +194,7 @@ class ChecklistTest extends TestCase
         // хамаарах ёсгүй.
         $this->actingAs($this->inspector, 'sanctum')
             ->postJson("/api/v1/work-items/{$item->id}/inspections", [
-                'stage' => 'client',
+                'stage' => Inspection::STAGE_FINAL,
                 'result' => 'rejected',
                 'acceptedQty' => 0,
                 'reason' => 'Түвшин зөрүүтэй',
@@ -190,7 +202,7 @@ class ChecklistTest extends TestCase
             ])
             ->assertCreated();
 
-        $this->assertSame('returned', $item->refresh()->review_state);
+        $this->assertSame('returned_by_final', $item->refresh()->review_state);
     }
 
     public function test_approves_when_every_required_item_passed(): void
@@ -199,7 +211,7 @@ class ChecklistTest extends TestCase
 
         $response = $this->actingAs($this->inspector, 'sanctum')
             ->postJson("/api/v1/work-items/{$item->id}/inspections", [
-                'stage' => 'client',
+                'stage' => Inspection::STAGE_FINAL,
                 'result' => 'accepted',
                 'acceptedQty' => 5,
                 'checklist' => $this->answers('pass'),
@@ -220,7 +232,7 @@ class ChecklistTest extends TestCase
 
         $this->actingAs($this->inspector, 'sanctum')
             ->postJson("/api/v1/work-items/{$item->id}/inspections", [
-                'stage' => 'client',
+                'stage' => Inspection::STAGE_FINAL,
                 'result' => 'accepted',
                 'acceptedQty' => 5,
                 'checklist' => $answers,
@@ -241,7 +253,7 @@ class ChecklistTest extends TestCase
 
         $this->actingAs($this->inspector, 'sanctum')
             ->postJson("/api/v1/work-items/{$item->id}/inspections", [
-                'stage' => 'client',
+                'stage' => Inspection::STAGE_FINAL,
                 'result' => 'accepted',
                 'acceptedQty' => 5,
                 'checklist' => [...$this->answers('pass'), ['itemId' => $foreign->id, 'result' => 'pass']],
@@ -277,7 +289,7 @@ class ChecklistTest extends TestCase
 
         $this->actingAs($this->inspector, 'sanctum')
             ->postJson("/api/v1/work-items/{$item->id}/inspections", [
-                'stage' => 'client',
+                'stage' => Inspection::STAGE_FINAL,
                 'result' => 'accepted',
                 'acceptedQty' => 5,
             ])
@@ -355,7 +367,7 @@ class ChecklistTest extends TestCase
 
         $this->actingAs($this->inspector, 'sanctum')
             ->postJson("/api/v1/work-items/{$item->id}/inspections", [
-                'stage' => 'client',
+                'stage' => Inspection::STAGE_FINAL,
                 'result' => 'accepted',
                 'acceptedQty' => 5,
                 'checklist' => $this->answers('pass'),
@@ -379,7 +391,7 @@ class ChecklistTest extends TestCase
 
         $this->actingAs($this->inspector, 'sanctum')
             ->postJson("/api/v1/work-items/{$item->id}/inspections", [
-                'stage' => 'client',
+                'stage' => Inspection::STAGE_FINAL,
                 'result' => 'accepted',
                 'acceptedQty' => 5,
                 'checklist' => $this->answers('pass'),

@@ -43,6 +43,45 @@ class UserController extends Controller
         return UserResource::collection($query->get());
     }
 
+    /**
+     * GET /users/inspectors
+     *
+     * Хяналтын инженерээр оноож болох хүмүүс.
+     *
+     * ЯАГААД ТУСДАА ЭНДПОЙНТ ВЭ: `index` нь ЗӨВХӨН админ, захиралд нээлттэй
+     * (и-мэйл, эрхийн бүтэн зураг гардаг). Гэтэл хяналтын инженер оноох эрх
+     * нь ерөнхий инженер, төслийн менежерт БАС бий. Тэд `/users`-ээс 403
+     * авдаг тул сонгох цонх хоосон гарч, функц ажиллахгүй болно.
+     *
+     * Тиймээс энд ЗӨВХӨН нэр, албан тушаал гаргана — и-мэйл, эрхийн
+     * мэдээлэл үгүй.
+     *
+     * Шүүлт нь `canInspect()`-ээр явна, үүргийн жагсаалтыг хуулбарлахгүй:
+     * `INSPECTOR_ROLES` өөрчлөгдөхөд энэ эндпойнт дагаж өөрчлөгдөнө.
+     */
+    public function inspectors(Request $request): JsonResponse
+    {
+        abort_unless(
+            $request->user()?->canAssignInspectors(),
+            403,
+            'Танд хяналтын инженер оноох эрх байхгүй.'
+        );
+
+        $rows = User::query()
+            ->where('is_active', true)
+            ->whereIn('role', User::INSPECTOR_ROLES)
+            ->orderBy('name')
+            ->get(['id', 'name', 'position', 'role'])
+            ->map(fn (User $user) => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'position' => $user->position,
+                'roleLabel' => User::ROLES[$user->role] ?? $user->role,
+            ]);
+
+        return response()->json(['data' => $rows]);
+    }
+
     /** Дэлгэцийн сонголтын эх сурвалж — үүргийн жагсаалтыг хатуу бичихгүй. */
     public function roles(Request $request): JsonResponse
     {
@@ -157,6 +196,15 @@ class UserController extends Controller
             'Өөрийгөө идэвхгүй болгох боломжгүй.'
         );
 
+        /*
+         * Сүүлийн идэвхтэй админыг хамгаална.
+         *
+         * Одоогоор хэрэглэгч удирдах эрх ЗӨВХӨН админд байгаа тул энэ
+         * нөхцөлд хүрэх цорын гагц зам нь өөрийгөө хаах — тэр нь дээрх
+         * шалгуураар аль хэдийн хаагдсан. Гэсэн хэдий ч үлдээв:
+         * ирээдүйд өөр үүрэг хэрэглэгч удирдах эрхтэй болвол (жишээ нь
+         * HR) тэр үед энэ мөр л системийг түгжигдэхээс аварна.
+         */
         abort_if(
             $user->role === 'admin' && User::where('role', 'admin')->where('is_active', true)->count() <= 1,
             422,

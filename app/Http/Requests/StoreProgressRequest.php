@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Services\HoldPointGate;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Validator;
 
@@ -72,6 +73,21 @@ class StoreProgressRequest extends FormRequest
                         'completedQty',
                         "Үлдэгдэл {$remaining} {$workItem->unit} — түүнээс их байж болохгүй."
                     );
+                }
+            },
+
+            /*
+             * ШАЛГАЛТЫН ЦЭГ — батлагдаагүй далд ажил дараагийнхаа замыг хаана.
+             *
+             * Энэ хориг нь гүйцэтгэл МЭДЭЭЛЭХ үед тавигдана, батлах үед биш:
+             * бетон цутгасны дараа доторх арматурыг хэн ч шалгаж чадахгүй тул
+             * «дараа няцаана» гэдэг нь оройтсон байна.
+             */
+            function (Validator $validator) {
+                $reason = app(HoldPointGate::class)->reason($this->route('workItem'));
+
+                if ($reason !== null) {
+                    $validator->errors()->add('completedQty', $reason);
                 }
             },
         ];

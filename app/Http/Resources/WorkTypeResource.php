@@ -14,7 +14,16 @@ class WorkTypeResource extends JsonResource
             'groupId' => $this->work_type_group_id,
             'groupName' => $this->whenLoaded('group', fn () => $this->group?->name),
             'name' => $this->name,
+            /*
+             * Код нь импортын ХОЛБОХ ТҮЛХҮҮР.
+             *
+             * Төсвийн файлыг системтэй холбох цорын ганц зам. Дэлгэц
+             * дээр харуулахгүй бол инженер «кодоо тулга» гэсэн зааврыг
+             * биелүүлэх аргагүй болно.
+             */
             'code' => $this->code,
+            // Нэг код олон ажилд хуваагдах үед ялгах шинж («Айлын тагт»).
+            'codePart' => $this->code_part,
             'unit' => $this->unit,
             'level' => $this->level,
             'sequenceNumber' => (int) $this->sequence_number,

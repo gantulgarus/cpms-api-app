@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Location;
+use App\Models\WorkItem;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 
@@ -30,7 +31,22 @@ class WorkItemFilter
         $query
             ->when($request->query('workTypeId'), fn ($q, $v) => $q->where('work_type_id', $v))
             ->when($request->query('status'), fn ($q, $v) => $q->where('status', $v))
-            ->when($request->query('reviewState'), fn ($q, $v) => $q->where('review_state', $v))
+            /*
+             * `reviewState` нь нэг төлөв ЭСВЭЛ бүлэг байж болно.
+             *
+             * Хоёр шат болоход «батлахыг хүлээж буй» гэсэн ойлголт хоёр
+             * төлөв рүү салсан. Дэлгэц дээр «нийт хүлээгдэж буй 412»
+             * гэсэн карт дарахад хоёуланг нь харуулах хэрэгтэй — тиймээс
+             * `pending` ба `returned` нь БҮЛГИЙН нэр болж үлдэнэ.
+             *
+             * Бүлгийг далд дүрэм болгохгүй, `WorkItem`-ийн тогтмолоос
+             * уншина: шинэ төлөв нэмэгдвэл энд дагаж өөрчлөгдөнө.
+             */
+            ->when($request->query('reviewState'), fn ($q, $v) => match ($v) {
+                'pending' => $q->whereIn('review_state', WorkItem::PENDING_STATES),
+                'returned' => $q->whereIn('review_state', WorkItem::RETURNED_STATES),
+                default => $q->where('review_state', $v),
+            })
             ->when($request->query('workTypeGroupId'), fn ($q, $v) => $q->whereHas(
                 'workType',
                 fn ($w) => $w->where('work_type_group_id', $v)
@@ -46,6 +62,24 @@ class WorkItemFilter
             $query->whereNull('contractor_id');
         } elseif ($contractorId) {
             $query->where('contractor_id', $contractorId);
+        }
+
+        /*
+         * `inspectorId=none` — хяналтын инженер оноогдоогүй ажлууд.
+         *
+         * Энэ нь ердийн шүүлтүүр биш, ХЭРЭГТЭЙ самбар: төсвийн 36 мөрд
+         * инженер заагаагүй тул тэдгээрийн гүйцэтгэл батлахыг хүлээхэд хэн
+         * рүү ч явахгүй. Жагсаалтаар харуулж чадахгүй бол хэн ч эс мэдэнэ.
+         *
+         * `inspectorId=me` — хяналтын инженер өөрийн ажлыг хурдан олох зам.
+         */
+        $inspectorId = $request->query('inspectorId');
+        if ($inspectorId === 'none') {
+            $query->whereNull('inspector_id');
+        } elseif ($inspectorId === 'me') {
+            $query->where('inspector_id', $request->user()?->id);
+        } elseif ($inspectorId) {
+            $query->where('inspector_id', $inspectorId);
         }
 
         return $query;

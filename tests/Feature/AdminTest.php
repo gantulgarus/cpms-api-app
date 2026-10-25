@@ -196,7 +196,20 @@ class AdminTest extends TestCase
         $this->assertDatabaseHas('users', ['id' => $target->id]);
     }
 
-    public function test_last_admin_cannot_be_deactivated(): void
+    /**
+     * Системд ҮРГЭЛЖ дор хаяж нэг идэвхтэй админ үлдэнэ.
+     *
+     * Урьд нь энэ тест «захирал сүүлчийн админыг хаах гэвэл 422» гэж
+     * шалгадаг байв. Захирал хэрэглэгч удирдахаа больсон тул тэр
+     * тохиолдол ХҮРЭХ БОЛОМЖГҮЙ болсон: хэрэглэгч удирдах эрхтэй цорын
+     * гагц үүрэг нь админ тул «нэг л идэвхтэй админ үлдсэн атлаа өөр
+     * удирдагч байх» гэсэн байдал үүсэхгүй.
+     *
+     * Хамгаалалт нь хянагч дээр ҮЛДСЭН — ирээдүйд өөр үүрэг хэрэглэгч
+     * удирдах эрхтэй болвол тэр дор нь ажиллана. Энд түүний хамгаалж
+     * буй ҮР ДҮНГ шалгана.
+     */
+    public function test_the_system_always_keeps_one_active_admin(): void
     {
         $admin = $this->asAdmin();
         $second = $this->user('admin');
@@ -204,11 +217,14 @@ class AdminTest extends TestCase
         // Хоёр админ байхад нэгийг нь хааж болно.
         $this->deleteJson("/api/v1/users/{$second->id}")->assertOk();
 
-        // Үлдсэн ганцыг хаавал системд хэн ч орж чадахгүй болно.
-        $this->actingAs($admin, 'sanctum');
-        $other = $this->user('director');
-        $this->actingAs($other, 'sanctum');
+        // Үлдсэн ганцыг ӨӨРӨӨ хаах боломжгүй — өөр удирдагч ч байхгүй.
         $this->deleteJson("/api/v1/users/{$admin->id}")->assertStatus(422);
+
+        $this->assertSame(
+            1,
+            User::where('role', 'admin')->where('is_active', true)->count(),
+            'Идэвхтэй админгүй болвол системд хэн ч орж чадахгүй.',
+        );
     }
 
     public function test_admin_cannot_deactivate_themselves(): void
@@ -245,7 +261,7 @@ class AdminTest extends TestCase
             ->assertOk();
     }
 
-    public function test_only_admin_and_director_manage_users(): void
+    public function test_only_admin_manages_users(): void
     {
         foreach (['site_engineer', 'inspector', 'project_manager', 'general_engineer'] as $role) {
             $this->actingAs($this->user($role), 'sanctum');
@@ -257,7 +273,8 @@ class AdminTest extends TestCase
             ])->assertForbidden();
         }
 
-        $this->actingAs($this->user('director'), 'sanctum');
+        // Хэрэглэгчийн жагсаалтыг зөвхөн админ хардаг.
+        $this->actingAs($this->user('admin'), 'sanctum');
         $this->getJson('/api/v1/users')->assertOk();
     }
 
@@ -294,6 +311,86 @@ class AdminTest extends TestCase
             'unit' => 'м2',
             'level' => 'floor',
         ])->assertCreated()->assertJsonPath('data.name', 'Шинэ материал угсрах');
+    }
+
+    /**
+     * Төсвийн код нь лавлахад хадгалагдаж, хариуд буцна.
+     *
+     * Код бол төсвийн файлыг системтэй холбох ЦОРЫН ГАНЦ түлхүүр:
+     * төсөвт «Блокон хана», лавлахад «блокон өрлөг» гэж бичигддэг тул
+     * нэрээр тааруулах боломжгүй. Хариуд ирэхгүй бол дэлгэц дээр
+     * харуулах, инженер тулгах аргагүй болно.
+     */
+    public function test_a_work_type_carries_its_budget_code(): void
+    {
+        $this->seed(WorkTypeSeeder::class);
+        $this->actingAs($this->asAdmin(), 'sanctum');
+
+        $this->postJson('/api/v1/work-types', [
+            'groupId' => WorkTypeGroup::first()->id,
+            'name' => 'Пилта-Тагт',
+            'code' => '17.1.6',
+            'codePart' => 'Айлын тагт',
+            'unit' => 'м2',
+            'level' => 'unit',
+        ])
+            ->assertCreated()
+            ->assertJsonPath('data.code', '17.1.6')
+            ->assertJsonPath('data.codePart', 'Айлын тагт');
+    }
+
+    /**
+     * Ижил «код + бүрдэл» хоёр удаа бүртгэгдэхгүй.
+     *
+     * Импорт нь кодыг ЭХЛЭЭД таарсан төрөлд олгодог тул давхардсан
+     * код нь хоёр дахь төрлийг хэзээ ч сонгогдохгүй болгоно —
+     * чимээгүй, бас барихад хэцүү.
+     */
+    public function test_a_duplicate_code_is_refused_but_parts_may_split_it(): void
+    {
+        $this->seed(WorkTypeSeeder::class);
+        $this->actingAs($this->asAdmin(), 'sanctum');
+
+        $base = [
+            'groupId' => WorkTypeGroup::first()->id,
+            'unit' => 'м2',
+            'level' => 'floor',
+        ];
+
+        $this->postJson('/api/v1/work-types', [...$base, 'name' => 'Нэг', 'code' => '9.9.9'])
+            ->assertCreated();
+
+        $this->postJson('/api/v1/work-types', [...$base, 'name' => 'Хоёр', 'code' => '9.9.9'])
+            ->assertStatus(422);
+
+        // Бүрдэл нь ялгаж өгвөл нэг кодыг хуваахыг зөвшөөрнө.
+        $this->postJson('/api/v1/work-types', [
+            ...$base, 'name' => 'Гурав', 'code' => '9.9.9', 'codePart' => 'Айлын тагт',
+        ])->assertCreated();
+    }
+
+    /**
+     * Буруу бичигдсэн кодыг АРИЛГАЖ болно.
+     *
+     * Нэгж, түвшнээс ялгаатай нь код нь үүссэн ажлын мөрүүдэд
+     * шингэдэггүй — зөвхөн дараагийн импортод хэрэглэгдэнэ. Засах
+     * боломжгүй бол тэр төрөл рүү дахиж импорт орохгүй болно.
+     */
+    public function test_a_code_can_be_cleared_even_when_the_type_is_in_use(): void
+    {
+        $this->seed(WorkTypeSeeder::class);
+        $this->actingAs($this->asAdmin(), 'sanctum');
+
+        [$block, $workType] = $this->blockWithOneWorkItem();
+
+        // Лавлахад БАЙХГҮЙ код сонгоно — давхардлын хамгаалалт тусдаа.
+        $this->patchJson("/api/v1/work-types/{$workType->id}", ['code' => '99.9.9'])
+            ->assertOk()
+            ->assertJsonPath('data.code', '99.9.9');
+
+        $this->patchJson("/api/v1/work-types/{$workType->id}", ['code' => '  '])
+            ->assertOk()
+            ->assertJsonPath('data.code', null);
     }
 
     public function test_site_engineer_cannot_edit_reference_data(): void

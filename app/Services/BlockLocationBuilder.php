@@ -72,11 +72,140 @@ class BlockLocationBuilder
             }
         }
 
+        // Техникийн давхар — төсөвт БАЙДАГ тул байршил нь ч байх ёстой.
+        [$techFloor, $techSpaces] = $this->technicalFloor(
+            $block, $rootId, $rootPath, $floors, $now, $unitsPerFloor > 0
+        );
+        $floorRows[] = $techFloor;
+        $unitRows = [...$unitRows, ...$techSpaces];
+
         foreach (array_chunk([...$roots, ...$floorRows, ...$unitRows], self::CHUNK) as $chunk) {
             Location::insert($chunk);
         }
 
         return ['block' => $roots, 'floor' => $floorRows, 'unit' => $unitRows];
+    }
+
+    /**
+     * Техникийн давхрын зайнууд.
+     *
+     * ЯАГААД АЙЛ БИШ ВЭ: техникийн давхарт орон сууц байхгүй. Гэвч төсөвт
+     * тэнд шавардлага, замаска, эмульс зэрэг АЙЛЫН ТҮВШНИЙ ажил бүртгэгдсэн
+     * байдаг (403 м² хана, 99 м² тааз). Байршилгүй бол тэдгээрийн тоо
+     * хэмжээ хаана ч буухгүй — импорт дээр 16 нүд алдагдаж байсан.
+     *
+     * Нэрс нь төсвийн задаргааны хуудаснаас: тэнд яг ийм дөрвөн зай бий.
+     */
+    /** @see self::TECHNICAL_SPACE_COUNT — хоёр нь таарахыг тест шалгана. */
+    private const TECHNICAL_SPACES = [
+        'Сууцны бус талбай-1',
+        'Сууцны бус талбай-2',
+        'Нийтийн эдэлбэр',
+        'Шатны хонгил',
+    ];
+
+    public const TECHNICAL_FLOOR = 'Техникийн давхар';
+
+    /**
+     * Техникийн давхрын зайны тоо — массиваас ГАРНА, дахин бичигдэхгүй.
+     *
+     * Загварын тооцоо (`BlockDesign::estimatedItems`) эндээс уншина. Тоог
+     * тусад нь бичвэл зай нэмэхэд тооцоо хоцорч, дэлгэц дээр үүсэхээс өөр
+     * тоо харагдана — яг тэр болсон.
+     */
+    public static function technicalSpaceCount(): int
+    {
+        return count(self::TECHNICAL_SPACES);
+    }
+
+    /**
+     * Байгаа блокт дутуу стандарт байршлыг нөхнө.
+     *
+     * ЯАГААД ХЭРЭГТЭЙ ВЭ: техникийн давхрыг хожим нэмсэн тул өмнө үүссэн
+     * блокуудад байхгүй. Төсвийн импорт тэр давхрын тоо хэмжээг хаана ч
+     * буулгаж чадахгүй — чимээгүй алдагдана.
+     *
+     * ЗӨВХӨН НЭМНЭ, хэзээ ч устгахгүй. Давтаж дуудахад аюулгүй.
+     *
+     * @return int  хэдэн байршил нэмэгдсэн
+     */
+    public function ensureStandardFloors(Block $block): int
+    {
+        $existing = Location::where('block_id', $block->id)
+            ->where('level', 'floor')
+            ->pluck('name')
+            ->all();
+
+        if (in_array(self::TECHNICAL_FLOOR, $existing, true)) {
+            return 0;
+        }
+
+        $root = Location::where('block_id', $block->id)->where('level', 'block')->first();
+
+        if (! $root) {
+            return 0;   // байршлын мод огт байхгүй — энд засах зүйлгүй
+        }
+
+        [$floor, $spaces] = $this->technicalFloor(
+            $block, $root->id, $root->path_key, max((int) $block->floors, 1), now(),
+            (int) $block->units_per_floor > 0,
+        );
+
+        Location::insert([$floor, ...$spaces]);
+
+        return 1 + count($spaces);
+    }
+
+    /**
+     * @return array{0: array, 1: list<array>}  [давхар, зайнууд]
+     */
+    private function technicalFloor(
+        Block $block, string $rootId, string $rootPath, int $floors, $now,
+        bool $withSpaces = true,
+    ): array {
+        $floorId = (string) Str::uuid7();
+        $floorPath = $rootPath.$floorId.'/';
+
+        /*
+         * Дарааллын дугаар нь ДЭЭД давхраас хойш.
+         *
+         * Хуваарь үүнийг давхрын дугаар болгон хэрэглэдэг тул техникийн
+         * давхар хамгийн сүүлд товлогдоно — байгаа давхруудын дугаар
+         * хөдлөхгүй, тиймээс одоо байгаа огноо өөрчлөгдөхгүй.
+         */
+        $floor = $this->row(
+            $floorId, $block, $rootId, 'floor', self::TECHNICAL_FLOOR,
+            "{$block->name} › ".self::TECHNICAL_FLOOR, $floorPath, $floors + 1, $now
+        );
+
+        $spaces = [];
+
+        /*
+         * АЙЛГҮЙ барилгад техникийн давхрын зайнуудыг үүсгэхгүй.
+         *
+         * Зайнууд нь АЙЛЫН түвшний байршил. Үйлчилгээний барилга
+         * (`units_per_floor = 0`) дээр үүсгэвэл «айлгүй блокт айлын ажил
+         * нэмж болохгүй» гэсэн дүрэм хүчингүй болно: шалгалт нь айлын
+         * байршил байгаа эсэхээр хийгддэг тул 4 зай нь айлын ажлыг
+         * зөвшөөрүүлнэ. Яг тэр регресс гарсан.
+         *
+         * Төсвийн «Сууцны бус талбай» гэх задаргаа нь орон сууцны барилгын
+         * хуудсанд байдаг — үйлчилгээний барилгад хамаарахгүй.
+         */
+        if (! $withSpaces) {
+            return [$floor, $spaces];
+        }
+
+        foreach (self::TECHNICAL_SPACES as $i => $name) {
+            $spaceId = (string) Str::uuid7();
+            $spaces[] = $this->row(
+                $spaceId, $block, $floorId, 'unit', $name,
+                "{$block->name} › ".self::TECHNICAL_FLOOR." › {$name}",
+                $floorPath.$spaceId.'/', $i, $now
+            );
+        }
+
+        return [$floor, $spaces];
     }
 
     /** Аль хэдийн байгаа байршлыг ижил хэлбэрт оруулж буцаана. */

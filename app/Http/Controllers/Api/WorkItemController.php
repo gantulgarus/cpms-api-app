@@ -38,7 +38,7 @@ class WorkItemController extends Controller
         // Eloquent\Builder хүлээдэг. Тиймээс query-г шууд үүсгэнэ.
         $query = WorkItem::query()
             ->where('block_id', $block->id)
-            ->with(['location', 'workType.group', 'contractor'])
+            ->with(['location', 'workType.group', 'contractor', 'inspector'])
             ->orderBy('name');
 
         $this->filter->apply($query, $request);
@@ -73,7 +73,16 @@ class WorkItemController extends Controller
     /** GET /work-items/{workItem} */
     public function show(WorkItem $workItem): JsonResponse
     {
-        $workItem->load(['location', 'workType.group', 'contractor']);
+        $workItem->load(['location', 'workType.group', 'contractor', 'inspector']);
+
+        /*
+         * Шалгалтын цэгийн хоригийг ЗӨВХӨН энд бодно.
+         *
+         * Жагсаалтад оруулбал 200 мөр тутамд нэмэлт query явна. Хориг нь
+         * гүйцэтгэл бүртгэх товчийг хааж байгаа тул дэлгэрэнгүй хуудсанд л
+         * хэрэгтэй.
+         */
+        $workItem->setAttribute('with_hold_point', true);
         // Татгалзсан нийт хэмжээ = дахин хийсэн ажлын хэмжээ. Тусдаа мөр
         // үүсгэхгүйгээр дахин хийлтийн зардлыг ингэж хэмжинэ.
         $workItem->loadSum('inspections', 'rejected_qty');
@@ -151,11 +160,21 @@ class WorkItemController extends Controller
             $locked = WorkItem::lockForUpdate()->find($workItem->id);
 
             $acceptedQty = (float) $request->validated('acceptedQty', 0);
-            $pending = (float) $locked->reported_qty - (float) $locked->accepted_qty;
+            $stage = (string) $request->validated('stage');
+
+            /*
+             * Татгалзсан хэмжээг ТУХАЙН ШАТНЫ сангаас бодно.
+             *
+             * 2-р шатны сан нь «шалгасан − баталсан». Хэрэв мэдээлсэн дүнгээс
+             * бодвол талбайн инженер хараахан шалгаагүй хэмжээ ч татгалзсан
+             * гэж тэмдэглэгдэж, гүйцэтгэгч хийгээгүй ажлынхаа төлөө
+             * буруутгагдана.
+             */
+            $pending = $locked->stagePool($stage);
 
             $inspection = $locked->inspections()->create([
                 'inspector_id' => $request->user()?->id,
-                'stage' => $request->validated('stage'),
+                'stage' => $stage,
                 'result' => $request->validated('result'),
                 'accepted_qty' => $acceptedQty,
                 /*

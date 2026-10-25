@@ -16,8 +16,12 @@ use ZipArchive;
  * .xlsx нь XML файлуудын ZIP архив. Мөрийн текстийг `inlineStr` хэлбэрээр
  * бичнэ — `sharedStrings.xml` хэрэггүй болж, код хоёр дахин богиносно.
  *
- * ХЯЗГААР: томьёо, зураг, олон хуудас дэмжихгүй. Хэрэгтэй болбол PhpSpreadsheet
- * рүү шилжинэ.
+ * ОЛОН ХУУДАС дэмжинэ: `sheet('нэр')` дуудаад цааш `row()` бичнэ.
+ * Захиалагчийн төсвийн файл 29 хуудастай бөгөөд хоёр нь төсөв — тиймээс
+ * бидний үүсгэх жишээ, загвар файл ч олон хуудастай байх ёстой.
+ *
+ * ХЯЗГААР: томьёо, зураг дэмжихгүй. Хэрэгтэй болбол PhpSpreadsheet рүү
+ * шилжинэ.
  */
 class XlsxWriter
 {
@@ -40,16 +44,52 @@ class XlsxWriter
 
     public const LABEL = 8;
 
-    /** @var array<int, array<int, array{0: string|int|float|null, 1: int}>> */
-    private array $rows = [];
+    /**
+     * Мөнгө — бүхэл, мянгатаар тусгаарлана.
+     *
+     * `NUMBER` нь гурван аравтайг харуулдаг (тоо хэмжээнд зөв). Үнэд
+     * хэрэглэвэл «27,500.000» гэж гарах бөгөөд багана нарийссан үед
+     * Excel «###» болгож нуудаг.
+     *
+     * ЖАГСААЛТЫН ТӨГСГӨЛД нэмэгдсэн: дунд нь оруулбал бүх нүдний
+     * загвар гулсана.
+     */
+    public const MONEY = 9;
 
-    /** @var array<int, float> */
-    private array $columnWidths = [];
+    /**
+     * Хуудсууд.
+     *
+     * @var array<int, array{name: string, rows: array<int, array<int, array{0: string|int|float|null, 1: int}>>, widths: array<int, float>, merges: array<int, string>}>
+     */
+    private array $sheets = [];
 
-    /** @var array<int, string> */
-    private array $merges = [];
+    /** Одоо бичигдэж буй хуудасны индекс. */
+    private int $current = 0;
 
-    public function __construct(private readonly string $sheetName = 'Хуудас1') {}
+    public function __construct(string $sheetName = 'Хуудас1')
+    {
+        $this->sheets[] = ['name' => $sheetName, 'rows' => [], 'widths' => [], 'merges' => []];
+    }
+
+    /**
+     * Шинэ хуудас эхлүүлнэ — цаашдын `row()` түүн рүү бичнэ.
+     *
+     * Нэг нэртэй хоёр хуудас байж БОЛОХГҮЙ: Excel файлыг эвдэрсэн гэж
+     * үзээд нээхээс татгалзана.
+     */
+    public function sheet(string $name): self
+    {
+        foreach ($this->sheets as $sheet) {
+            if ($sheet['name'] === $name) {
+                throw new \RuntimeException("«{$name}» нэртэй хуудас аль хэдийн байна.");
+            }
+        }
+
+        $this->sheets[] = ['name' => $name, 'rows' => [], 'widths' => [], 'merges' => []];
+        $this->current = count($this->sheets) - 1;
+
+        return $this;
+    }
 
     /**
      * Мөр нэмнэ.
@@ -58,7 +98,7 @@ class XlsxWriter
      */
     public function row(array $cells = []): self
     {
-        $this->rows[] = array_map(
+        $this->sheets[$this->current]['rows'][] = array_map(
             fn ($cell) => is_array($cell) ? [$cell[0], $cell[1] ?? self::PLAIN] : [$cell, self::PLAIN],
             $cells,
         );
@@ -69,7 +109,7 @@ class XlsxWriter
     /** @param  array<int, float>  $widths  баганын өргөн (тэмдэгтээр) */
     public function widths(array $widths): self
     {
-        $this->columnWidths = $widths;
+        $this->sheets[$this->current]['widths'] = $widths;
 
         return $this;
     }
@@ -77,15 +117,35 @@ class XlsxWriter
     /** Одоогийн сүүлийн мөрөнд нүд нэгтгэнэ: `merge(0, 5)` = A..F. */
     public function mergeLastRow(int $from, int $to): self
     {
-        $r = count($this->rows);
-        $this->merges[] = self::cellRef($from, $r).':'.self::cellRef($to, $r);
+        $r = count($this->sheets[$this->current]['rows']);
+        $this->sheets[$this->current]['merges'][] = self::cellRef($from, $r).':'.self::cellRef($to, $r);
+
+        return $this;
+    }
+
+    /**
+     * Дурын тэгш өнцөгтийг нэгтгэнэ — мөрийн дугаар 1-ээс эхэлнэ.
+     *
+     * ХОЁР ДАВХАР ТОЛГОЙД зайлшгүй: бүлгийн нэрийг хүүхдүүдийнх нь
+     * дээгүүр ХЭВТЭЭ, нэг давхар баганын нэрийг хоёр мөрөөр нь БОСОО
+     * нэгтгэнэ. Үгүй бол толгой нь хагас хоосон, хагас давхардсан
+     * харагдана.
+     *
+     * Excel нэгтгэсэн нүдний утгыг ЗҮҮН ДЭЭД буландаа л хадгалдаг тул
+     * задлагч нь бүлгийн нэрийг эхний баганаас, баганын нэрийг дээд
+     * мөрнөөс уншина — энэ нь хоёулангийнх нь хүлээж буй хэлбэр.
+     */
+    public function merge(int $fromColumn, int $fromRow, int $toColumn, int $toRow): self
+    {
+        $this->sheets[$this->current]['merges'][] =
+            self::cellRef($fromColumn, $fromRow).':'.self::cellRef($toColumn, $toRow);
 
         return $this;
     }
 
     public function rowCount(): int
     {
-        return count($this->rows);
+        return count($this->sheets[$this->current]['rows']);
     }
 
     /** Файлыг үүсгээд замыг нь буцаана. */
@@ -101,7 +161,11 @@ class XlsxWriter
         $zip->addFromString('xl/workbook.xml', $this->workbook());
         $zip->addFromString('xl/_rels/workbook.xml.rels', $this->workbookRels());
         $zip->addFromString('xl/styles.xml', $this->styles());
-        $zip->addFromString('xl/worksheets/sheet1.xml', $this->sheet());
+
+        foreach ($this->sheets as $i => $sheet) {
+            $zip->addFromString('xl/worksheets/sheet'.($i + 1).'.xml', $this->sheetXml($sheet));
+        }
+
         $zip->close();
 
         return $path;
@@ -116,7 +180,7 @@ class XlsxWriter
             .'<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
             .'<Default Extension="xml" ContentType="application/xml"/>'
             .'<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
-            .'<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+            .$this->sheetOverrides()
             .'<Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>'
             .'</Types>';
     }
@@ -129,23 +193,58 @@ class XlsxWriter
             .'</Relationships>';
     }
 
+    private function sheetOverrides(): string
+    {
+        $xml = '';
+
+        foreach (array_keys($this->sheets) as $i) {
+            $xml .= '<Override PartName="/xl/worksheets/sheet'.($i + 1).'.xml"'
+                .' ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>';
+        }
+
+        return $xml;
+    }
+
     private function workbook(): string
     {
-        $name = self::esc(mb_substr($this->sheetName, 0, 31));
+        $entries = '';
+
+        foreach ($this->sheets as $i => $sheet) {
+            // Excel-ийн хязгаар: хуудасны нэр 31 тэмдэгтээс урт байж болохгүй.
+            $entries .= '<sheet name="'.self::esc(mb_substr($sheet['name'], 0, 31)).'"'
+                .' sheetId="'.($i + 1).'" r:id="rId'.($i + 1).'"/>';
+        }
 
         return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             .'<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"'
             .' xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">'
-            .'<sheets><sheet name="'.$name.'" sheetId="1" r:id="rId1"/></sheets>'
+            .'<sheets>'.$entries.'</sheets>'
             .'</workbook>';
     }
 
     private function workbookRels(): string
     {
+        $xml = '';
+
+        foreach (array_keys($this->sheets) as $i) {
+            $xml .= '<Relationship Id="rId'.($i + 1).'"'
+                .' Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet"'
+                .' Target="worksheets/sheet'.($i + 1).'.xml"/>';
+        }
+
+        /*
+         * Загварын холбоосын дугаар нь ХУУДСУУДЫН ДАРАА явна.
+         *
+         * Хатуу `rId2` бичвэл хоёр дахь хуудас түүнийг дарж, Excel файлыг
+         * эвдэрсэн гэж үзнэ.
+         */
+        $xml .= '<Relationship Id="rId'.(count($this->sheets) + 1).'"'
+            .' Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles"'
+            .' Target="styles.xml"/>';
+
         return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             .'<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
-            .'<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>'
-            .'<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>'
+            .$xml
             .'</Relationships>';
     }
 
@@ -159,7 +258,10 @@ class XlsxWriter
     {
         return '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
             .'<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
-            .'<numFmts count="1"><numFmt numFmtId="164" formatCode="#,##0.000"/></numFmts>'
+            .'<numFmts count="2">'
+            .'<numFmt numFmtId="164" formatCode="#,##0.000"/>'
+            .'<numFmt numFmtId="165" formatCode="#,##0"/>'
+            .'</numFmts>'
             .'<fonts count="5">'
             .'<font><sz val="11"/><name val="Calibri"/></font>'                                   // 0 энгийн
             .'<font><b/><sz val="16"/><color rgb="FF22303A"/><name val="Calibri"/></font>'         // 1 гарчиг
@@ -184,7 +286,7 @@ class XlsxWriter
             .'</border>'
             .'</borders>'
             .'<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>'
-            .'<cellXfs count="9">'
+            .'<cellXfs count="10">'
             // 0 PLAIN
             .'<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>'
             // 1 TITLE
@@ -208,17 +310,21 @@ class XlsxWriter
             .'<alignment horizontal="right" vertical="center"/></xf>'
             // 8 LABEL
             .'<xf numFmtId="0" fontId="4" fillId="0" borderId="0" xfId="0" applyFont="1"/>'
+            // 9 MONEY
+            .'<xf numFmtId="165" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1">'
+            .'<alignment horizontal="right" vertical="center"/></xf>'
             .'</cellXfs>'
             .'<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>'
             .'</styleSheet>';
     }
 
-    private function sheet(): string
+    /** @param array{name: string, rows: array<int, mixed>, widths: array<int, float>, merges: array<int, string>} $sheet */
+    private function sheetXml(array $sheet): string
     {
         $cols = '';
-        if ($this->columnWidths !== []) {
+        if ($sheet['widths'] !== []) {
             $cols = '<cols>';
-            foreach ($this->columnWidths as $i => $w) {
+            foreach ($sheet['widths'] as $i => $w) {
                 $n = $i + 1;
                 $cols .= '<col min="'.$n.'" max="'.$n.'" width="'.$w.'" customWidth="1"/>';
             }
@@ -226,7 +332,7 @@ class XlsxWriter
         }
 
         $body = '';
-        foreach ($this->rows as $r => $cells) {
+        foreach ($sheet['rows'] as $r => $cells) {
             $rowNo = $r + 1;
             $body .= '<row r="'.$rowNo.'">';
             foreach ($cells as $c => [$value, $style]) {
@@ -251,9 +357,9 @@ class XlsxWriter
         }
 
         $merges = '';
-        if ($this->merges !== []) {
-            $merges = '<mergeCells count="'.count($this->merges).'">';
-            foreach ($this->merges as $m) {
+        if ($sheet['merges'] !== []) {
+            $merges = '<mergeCells count="'.count($sheet['merges']).'">';
+            foreach ($sheet['merges'] as $m) {
                 $merges .= '<mergeCell ref="'.$m.'"/>';
             }
             $merges .= '</mergeCells>';

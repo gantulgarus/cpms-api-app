@@ -10,6 +10,7 @@ use App\Models\Project;
 use App\Models\User;
 use App\Models\WorkItem;
 use App\Models\WorkType;
+use App\Services\BlockLocationBuilder;
 use Database\Seeders\WorkTypeSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
@@ -82,11 +83,24 @@ class EmptyBlockTest extends TestCase
     {
         [$id] = $this->createEmpty();
 
-        // Байршилгүй бол ажил нэмэх газар байхгүй — блок мухардмал болно.
-        // 1 блок + (зоорь + 5 давхар) + 5×4 айл = 27
-        $this->assertSame(27, Location::where('block_id', $id)->count());
-        $this->assertSame(6, Location::where('block_id', $id)->where('level', 'floor')->count());
-        $this->assertSame(20, Location::where('block_id', $id)->where('level', 'unit')->count());
+        /*
+         * Байршилгүй бол ажил нэмэх газар байхгүй — блок мухардмал болно.
+         *
+         *   1 блок
+         * + 7 давхар   (зоорь + 5 давхар + ТЕХНИКИЙН давхар)
+         * + 24 айл     (5×4 + техникийн давхрын 4 зай)
+         * = 32
+         *
+         * Тоог ӨГӨГДЛӨӨС бодно: зай нэмэгдэхэд тест гараар засагдах
+         * шаардлагагүй байх ёстой.
+         */
+        $spaces = BlockLocationBuilder::technicalSpaceCount();
+        $floors = 5 + 2;
+        $units = 5 * 4 + $spaces;
+
+        $this->assertSame(1 + $floors + $units, Location::where('block_id', $id)->count());
+        $this->assertSame($floors, Location::where('block_id', $id)->where('level', 'floor')->count());
+        $this->assertSame($units, Location::where('block_id', $id)->where('level', 'unit')->count());
     }
 
     public function test_floors_are_required_when_no_design_is_chosen(): void
@@ -221,10 +235,10 @@ class EmptyBlockTest extends TestCase
                 'plannedQty' => 30,
             ])
             ->assertCreated()
-            // Давхрын түвшин — зоорь + 5 давхар = 6 мөр.
-            ->assertJsonPath('data.created', 6);
+            // Давхрын түвшин — зоорь + 5 давхар + техникийн давхар = 7 мөр.
+            ->assertJsonPath('data.created', 7);
 
-        $this->assertSame(6, WorkItem::where('block_id', $id)->count());
+        $this->assertSame(7, WorkItem::where('block_id', $id)->count());
     }
 
     public function test_unit_level_work_lands_on_every_apartment(): void
@@ -232,15 +246,15 @@ class EmptyBlockTest extends TestCase
         [$id] = $this->createEmpty(5, 4);
         $unitType = WorkType::where('level', 'unit')->firstOrFail();
 
-        // Айлын түвшин — 5 давхар × 4 айл = 20 мөр. Гараар 20 удаа дарах
-        // шаардлагагүй байх ёстой.
+        // Айлын түвшин — 5×4 айл + техникийн давхрын 4 зай = 24 мөр.
+        // Гараар 24 удаа дарах шаардлагагүй байх ёстой.
         $this->actingAs($this->manager, 'sanctum')
             ->postJson("/api/v1/blocks/{$id}/work-items", [
                 'workTypeId' => $unitType->id,
                 'plannedQty' => 8,
             ])
             ->assertCreated()
-            ->assertJsonPath('data.created', 20);
+            ->assertJsonPath('data.created', 5 * 4 + BlockLocationBuilder::technicalSpaceCount());
     }
 
     public function test_adding_the_same_work_type_twice_is_blocked(): void

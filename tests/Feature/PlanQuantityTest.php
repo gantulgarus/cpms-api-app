@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Jobs\ApplyBlockDesign;
+use App\Models\Inspection;
 use App\Models\Block;
 use App\Models\BlockDesign;
 use App\Models\Company;
@@ -10,6 +11,7 @@ use App\Models\DesignItem;
 use App\Models\Project;
 use App\Models\User;
 use App\Models\WorkItem;
+use App\Models\WorkType;
 use Database\Seeders\WorkTypeSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -37,6 +39,17 @@ class PlanQuantityTest extends TestCase
         parent::setUp();
 
         $this->seed(WorkTypeSeeder::class);
+
+        /*
+         * Эдгээр тест нь каскадын тухай БИШ — чанарын хуудас, тоо хэмжээ,
+         * дараалал, хамрах хүрээний тухай. Тиймээс ажлын төрлийг НЭГ
+         * шаттай болгоно: хоёр шатыг дамжуулбал тест бүр каскадтай
+         * холбогдож, шатны дүрэм өөрчлөгдөх бүрд 25 тест зэрэг унана —
+         * яг тэр болсон.
+         *
+         * Каскадыг `TwoStageInspectionTest` шалгана.
+         */
+        WorkType::query()->update(['inspection_stages' => 1]);
 
         $company = Company::create(['name' => 'Инэл ХХК']);
         /** @var Project $project */
@@ -241,7 +254,7 @@ class PlanQuantityTest extends TestCase
 
         $this->actingAs(User::factory()->create(['role' => 'inspector']), 'sanctum')
             ->postJson("/api/v1/work-items/{$item->id}/inspections", [
-                'stage' => 'client',
+                'stage' => Inspection::STAGE_FINAL,
                 'result' => 'accepted',
                 'acceptedQty' => 15,
             ])->assertCreated();
@@ -338,7 +351,7 @@ class PlanQuantityTest extends TestCase
 
         $this->actingAs(User::factory()->create(['role' => 'inspector']), 'sanctum')
             ->postJson("/api/v1/work-items/{$item->id}/inspections", [
-                'stage' => 'client',
+                'stage' => Inspection::STAGE_FINAL,
                 'result' => 'accepted',
                 'acceptedQty' => 10,
             ])->assertCreated();

@@ -13,6 +13,10 @@ class InspectionResource extends JsonResource
             'id' => $this->id,
             'workItemId' => $this->work_item_id,
             'stage' => $this->stage,
+            // Нэрийг СЕРВЕР өгнө: дэлгэц хоёр газар тус тусад нь бичвэл
+            // акт дээр «Захиалагчийн хяналт», дэлгэц дээр «Хяналтын инженер»
+            // гэж ижил шат хоёр нэртэй харагдана.
+            'stageLabel' => $this->stageLabel(),
             'result' => $this->result,
             'acceptedQty' => (float) $this->accepted_qty,
             'rejectedQty' => (float) $this->rejected_qty,

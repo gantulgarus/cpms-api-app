@@ -1,0 +1,128 @@
+[
+  {
+    "name": "Баганат Оргил констракшн ХХК",
+    "tradeSpecialty": "Сантехник",
+    "isCompany": true,
+    "category": "mep"
+  },
+  {
+    "name": "Бетон И Дезайн ХХК",
+    "tradeSpecialty": "Цутгамал төмөр бетон угсралт, цонх, лифт",
+    "isCompany": true,
+    "category": "structure"
+  },
+  {
+    "name": "Юнайтад Хангай ХХК",
+    "tradeSpecialty": "Цахилгаан, холбоо, дохиолол",
+    "isCompany": true,
+    "category": "mep"
+  },
+  {
+    "name": "Энх Бүрэн Дүүрэн ХХК",
+    "tradeSpecialty": "Дотор засал",
+    "isCompany": true,
+    "category": "finishing"
+  },
+  {
+    "name": "Бат-Тэм-ИнтеР ХХК",
+    "tradeSpecialty": "Гипсэн хана, тааз, MDF, нерж",
+    "isCompany": true,
+    "category": "finishing"
+  },
+  {
+    "name": "Төгс Чулуун Хийц ХХК",
+    "tradeSpecialty": "Чулуун фасад, дотор чулуу",
+    "isCompany": true,
+    "category": "stone_floor"
+  },
+  {
+    "name": "Тэргүүн Шал ХХК",
+    "tradeSpecialty": "Хар шал, паркет",
+    "isCompany": true,
+    "category": "stone_floor"
+  },
+  {
+    "name": "Эгшигт Цамхаг ХХК",
+    "tradeSpecialty": "Цонх",
+    "isCompany": true,
+    "category": "facade"
+  },
+  {
+    "name": "Акуа Марина ХХК",
+    "tradeSpecialty": "Салхивч",
+    "isCompany": true,
+    "category": "mep"
+  },
+  {
+    "name": "MHE LLC",
+    "tradeSpecialty": "Геодези, өрлөг",
+    "isCompany": true,
+    "category": "survey"
+  },
+  {
+    "name": "Бат-Эвол-Бридж Цамхаг ХХК",
+    "tradeSpecialty": "Шавардлага",
+    "isCompany": true,
+    "category": "masonry"
+  },
+  {
+    "name": "Юник Стоне ХХК",
+    "tradeSpecialty": "Будаг, плита",
+    "isCompany": true,
+    "category": "finishing"
+  },
+  {
+    "name": "Бат-Тайрес ХХК",
+    "tradeSpecialty": "Метал фасад, шилэн фасад",
+    "isCompany": true,
+    "category": "facade"
+  },
+  {
+    "name": "BEMP LLC",
+    "tradeSpecialty": "Хаалга суулгах",
+    "isCompany": true,
+    "category": "doors"
+  },
+  {
+    "name": "Ган Эвийн Түшиг ХХК",
+    "tradeSpecialty": "Паркетны ажил",
+    "isCompany": true,
+    "category": "stone_floor"
+  },
+  {
+    "name": "Дэлгэр мөрөн инженеринг ХХК",
+    "tradeSpecialty": "Сантехник",
+    "isCompany": true,
+    "category": "mep"
+  },
+  {
+    "name": "Ц. Идэрмөнх",
+    "tradeSpecialty": "Тагт, төмөр хийц",
+    "isCompany": false,
+    "category": "doors"
+  },
+  {
+    "name": "Б. Мөнх-Ирээдүй",
+    "tradeSpecialty": "Шавардлага",
+    "isCompany": false,
+    "category": "masonry"
+  },
+  {
+    "name": "Т. Төрбат",
+    "tradeSpecialty": "Өрлөг",
+    "isCompany": false,
+    "category": "masonry"
+  },
+  {
+    "name": "Н. Эрдэнэбаяр",
+    "tradeSpecialty": "Өрлөг",
+    "isCompany": false,
+    "category": "masonry"
+  },
+  {
+    "name": "М. Нарантэнгэр",
+    "tradeSpecialty": "Хөөсөн фасад",
+    "isCompany": false,
+    "category": "facade"
+  }
+]

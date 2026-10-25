@@ -51,6 +51,29 @@ class PurgeDemoData extends Command
             return self::SUCCESS;
         }
 
+        /*
+         * СИСТЕМИЙГ ЦООЖЛОХООС СЭРГИЙЛНЭ.
+         *
+         * Demo админ бол ихэвчлэн ЦОРЫН ГАНЦ админ байдаг. Түүнийг устгавал
+         * хэрэглэгч бүртгэх дэлгэц рүү орох зам байхгүй болно — тэр дэлгэц
+         * өөрөө нэвтэрсэн байхыг шаарддаг.
+         *
+         * Энэ нь бодитоор тохиолдсон: цэвэрлэгээний дараа хэн ч нэвтэрч
+         * чадахгүй болсон.
+         */
+        $survivingManagers = User::whereIn('role', User::USER_MANAGER_ROLES)
+            ->where('is_active', true)
+            ->whereNotIn('id', $users->pluck('id'))
+            ->count();
+
+        if ($survivingManagers === 0) {
+            $this->error('ЗОГСЛОО: устгасны дараа хэрэглэгч удирдах эрхтэй данс үлдэхгүй.');
+            $this->line('Эхлээд бодит админ үүсгэнэ үү:');
+            $this->line('  php artisan cpms:create-user --name="..." --email=... --role=admin');
+
+            return self::FAILURE;
+        }
+
         // Юу устахыг УРЬДЧИЛЖ харуулна. Cascade-аар хэдэн мянган мөр унждаг тул
         // «төсөл устгана» гэсэн ганц мөр нь хэрэглэгчид хангалтгүй мэдээлэл.
         $blockIds = DB::table('blocks')->whereIn('project_id', $projects->pluck('id'))->pluck('id');

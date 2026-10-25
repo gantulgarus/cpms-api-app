@@ -16,6 +16,16 @@ class UserResource extends JsonResource
             'email' => $this->email,
             'role' => $this->role,
             'roleLabel' => User::ROLES[$this->role] ?? $this->role,
+
+            /*
+             * Албан тушаал нь үүргээс ТУСДАА. Б.Сайхантамир «Гэрээний
+             * мэргэжилтэн» атлаа `inspector` үүрэгтэй — хяналтын инженер
+             * сонгох жагсаалтад дөрвөн хүн бүгд «Хяналтын инженер» гэж
+             * харагдвал хэн нь хэн болохыг ялгах арга үгүй болно.
+             */
+            'position' => $this->position,
+            'unit' => $this->unit,
+
             'scopeBlockIds' => $this->scope_block_ids ?? [],
             'contractorId' => $this->contractor_id,
             'contractorName' => $this->whenLoaded('contractor', fn () => $this->contractor?->name),
@@ -25,6 +35,7 @@ class UserResource extends JsonResource
             // эрхтэй юу" гэдгийг харахад хэрэгтэй.
             'canReportProgress' => $this->canReportProgress(),
             'canInspect' => $this->canInspect(),
+            'canCheck' => $this->canCheck(),
             'createdAt' => $this->created_at?->toIso8601String(),
         ];
     }

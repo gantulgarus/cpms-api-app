@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\WorkItemResource;
 use App\Models\Block;
 use App\Models\Contractor;
+use App\Models\User;
 use App\Models\WorkItem;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -87,6 +88,8 @@ class WorkItemAssignmentController extends Controller
             .'Хариуцагчийг нь солих боломжгүй — гүйцэтгэлийн түүх өөр компанид шилжинэ.'
         );
 
+        $this->guardActive($validated['contractorId'] ?? null);
+
         $affected = DB::transaction(function () use ($query, $validated) {
             $ids = (clone $query)->pluck('id');
 
@@ -120,6 +123,8 @@ class WorkItemAssignmentController extends Controller
 
         $next = $validated['contractorId'] ?? null;
 
+        $this->guardActive($next);
+
         abort_if(
             (float) $workItem->reported_qty > 0
                 && $workItem->contractor_id !== null
@@ -132,7 +137,62 @@ class WorkItemAssignmentController extends Controller
 
         return response()->json([
             'data' => new WorkItemResource(
-                $workItem->refresh()->load(['location', 'workType.group', 'contractor'])
+                $workItem->refresh()->load(['location', 'workType.group', 'contractor', 'inspector'])
+            ),
+        ]);
+    }
+
+    /**
+     * PATCH /work-items/{workItem}/inspector
+     *
+     * Ажлын хяналт шалгалтыг хариуцах инженерийг солино.
+     *
+     * ЯАГААД ТУСДАА ЭРХ ВЭ: гүйцэтгэгч оноох нь ГЭРЭЭНИЙ шийдвэр
+     * (`canManageContractors`), хяналтын инженер оноох нь ДОТООД хуваарилалт.
+     * Ерөнхий инженер хэнийг юунд хянуулахаа шийдэх ёстой, гэхдээ
+     * гүйцэтгэгчийн гэрээнд хүрэх эрхгүй.
+     *
+     * ГОЛ ХОРИГ: `canInspect()` эрхгүй хүнийг оноож болохгүй. Оноовол
+     * батлахыг хүлээж байгаа ажил батлах ЭРХГҮЙ хүн рүү явж, мөнхөд
+     * гацна — хэн ч шалтгааныг нь мэдэхгүй.
+     */
+    public function assignInspector(Request $request, WorkItem $workItem): JsonResponse
+    {
+        abort_unless(
+            $request->user()?->canAssignInspectors(),
+            403,
+            'Танд хяналтын инженер оноох эрх байхгүй.'
+        );
+
+        $validated = $request->validate([
+            /** `null` = хариуцагчийг авах. */
+            'inspectorId' => ['nullable', 'integer', 'exists:users,id'],
+        ]);
+
+        $next = $validated['inspectorId'] ?? null;
+
+        if ($next !== null) {
+            $user = User::find($next);
+
+            abort_unless(
+                $user?->is_active,
+                422,
+                'Эрх хаагдсан хэрэглэгчийг хяналтын инженерээр оноож болохгүй.'
+            );
+
+            abort_unless(
+                $user->canInspect(),
+                422,
+                "{$user->name} ({$user->position}) нь гүйцэтгэл батлах эрхгүй. "
+                .'Хяналтын инженерээр оноовол батлахыг хүлээсэн ажил гацна.'
+            );
+        }
+
+        $workItem->update(['inspector_id' => $next]);
+
+        return response()->json([
+            'data' => new WorkItemResource(
+                $workItem->refresh()->load(['location', 'workType.group', 'contractor', 'inspector'])
             ),
         ]);
     }
@@ -184,6 +244,32 @@ class WorkItemAssignmentController extends Controller
         }
 
         return response()->json(['data' => array_values($groups)]);
+    }
+
+
+    /**
+     * Гэрээ цуцлагдсан гүйцэтгэгчид ШИНЭ ажил оноогдохгүй.
+     *
+     * Оноовол акт нь түүн рүү явж, төлбөр гарах эрсдэлтэй. Хуучин ажлыг нь
+     * хөндөхгүй — түүх, барьцаа, торгууль үлдэх ёстой.
+     */
+    private function guardActive(?string $contractorId): void
+    {
+        if (! $contractorId) {
+            return;
+        }
+
+        $contractor = Contractor::find($contractorId);
+
+        abort_unless(
+            $contractor?->canTakeWork(),
+            422,
+            sprintf(
+                '%s нь «%s» төлөвтэй — шинэ ажил оноох боломжгүй.',
+                $contractor?->name ?? 'Гүйцэтгэгч',
+                Contractor::STATUSES[$contractor?->status] ?? '—',
+            )
+        );
     }
 
     /**

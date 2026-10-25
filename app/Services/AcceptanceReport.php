@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Contractor;
+use App\Models\Inspection;
 use App\Models\Project;
 use App\Models\User;
 use Illuminate\Support\Carbon;
@@ -40,7 +41,14 @@ class AcceptanceReport
         ?string $contractorId,
         string $from,
         string $to,
-        string $stage = 'client',
+        /*
+         * Анхдагч нь 2-Р ШАТ — акт нь ЗӨВХӨН эцсийн батлалтыг агуулна.
+         *
+         * 1-р шат (талбайн инженер шалгасан) нь акт биш: тэр хэмжээг хяналтын
+         * инженер хараахан баталгаажуулаагүй. Хольвол актад баталгаажаагүй
+         * ажил орж, төлбөр түүн дээр бодогдох эрсдэлтэй.
+         */
+        string $stage = Inspection::STAGE_FINAL,
         ?string $blockId = null,
     ): array {
         $fromDate = Carbon::parse($from)->startOfDay();

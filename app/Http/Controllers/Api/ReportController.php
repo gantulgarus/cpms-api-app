@@ -79,16 +79,15 @@ class ReportController extends Controller
             $validated['contractorId'] ?? null,
             $validated['from'],
             $validated['to'],
-            $validated['stage'] ?? 'client',
+            $validated['stage'] ?? Inspection::STAGE_FINAL,
             $validated['blockId'] ?? null,
         );
     }
 
     private function writeHeader(XlsxWriter $sheet, array $data): void
     {
-        $stageLabel = $data['stage'] === 'client'
-            ? 'Захиалагчийн хяналтад батлагдсан'
-            : 'Ерөнхий гүйцэтгэгчийн хяналтад батлагдсан';
+        // Шатны нэр нь нэг газар — `Inspection::STAGE_LABELS`.
+        $stageLabel = Inspection::STAGE_LABELS[$data['stage']] ?? $data['stage'];
 
         $sheet->row([['ГҮЙЦЭТГЭЛИЙН АКТ', XlsxWriter::TITLE]])->mergeLastRow(0, 7);
         $sheet->row([[$data['project']['name'], XlsxWriter::SUBTITLE]])->mergeLastRow(0, 7);
@@ -122,7 +121,15 @@ class ReportController extends Controller
             ['Нэгж', XlsxWriter::HEADER],
             ['Батлагдсан', XlsxWriter::HEADER],
             ['Огноо', XlsxWriter::HEADER],
-            ['Шалгасан', XlsxWriter::HEADER],
+            /*
+             * «БАТАЛСАН», «шалгасан» БИШ.
+             *
+             * Актад ЗӨВХӨН 2-р шат (эцсийн батлалт) ордог тул энэ мөрөнд
+             * бичигдсэн хүн бол баталсан хяналтын инженер. «Шалгасан»
+             * гэвэл 1-р шатны талбайн инженертэй андуурагдана — тэр нь
+             * актад гарын үсэг зурдаггүй хүн.
+             */
+            ['Баталсан', XlsxWriter::HEADER],
         ]);
 
         if ($data['groups'] === []) {

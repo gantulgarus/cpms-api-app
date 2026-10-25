@@ -1,0 +1,19 @@
+[
+  { "no": 1,  "name": "Г.Батболд",      "unit": "Удирдлага",             "position": "Гүйцэтгэх захирал",    "email": "batbold@inel.mn",     "role": "director" },
+  { "no": 13, "name": "Г.Дөлгөөн",      "unit": "Төслийн гүйцэтгэл ИТА", "position": "Ерөнхий инженер",      "email": "dolgoon@inel.mn",     "role": "general_engineer" },
+  { "no": 11, "name": "С.Нарантуяа",    "unit": "Төслийн хяналт",        "position": "Төслийн менежер",      "email": "narantuya@inel.mn",   "role": "project_manager" },
+
+  { "no": 10, "name": "Ц.Хулан",        "unit": "Төслийн хяналт",        "position": "Хяналтын инженер",     "email": "khulan@inel.mn",      "role": "inspector",        "budgetName": "Хулан" },
+  { "no": 8,  "name": "Б.Сайхантамир",  "unit": "Захиргаа",              "position": "Гэрээний мэргэжилтэн", "email": "saikhantamir@inel.mn","role": "inspector",        "budgetName": "Тамир" },
+  { "no": 18, "name": "Н.Сандагдорж",   "unit": "Төслийн гүйцэтгэл ИТА", "position": "Цахилгааны инженер",   "email": "sandagdorj@inel.mn",  "role": "inspector",        "budgetName": "Сандагдорж" },
+  { "no": 15, "name": "И.Дэлгэрдалай",  "unit": "Төслийн гүйцэтгэл ИТА", "position": "Сантехникийн инженер", "email": "delgerdalai@inel.mn", "role": "inspector",        "budgetName": "Дэлгэрдалай" },
+
+  { "no": 14, "name": "Б.Энхжаргал",    "unit": "Төслийн гүйцэтгэл ИТА", "position": "Барилгын инженер",     "email": "enkhjargal@inel.mn",  "role": "site_engineer" },
+  { "no": 16, "name": "Б.Мөнх-Од",      "unit": "Төслийн гүйцэтгэл ИТА", "position": "Барилгын инженер",     "email": "munkh-od@inel.mn",    "role": "site_engineer" },
+  { "no": 17, "name": "Г.Цэрэндаваа",   "unit": "Төслийн гүйцэтгэл ИТА", "position": "Дулааны инженер",      "email": "tserendavaa@inel.mn", "role": "site_engineer" },
+  { "no": 19, "name": "Т.Билгүүн",      "unit": "Төслийн гүйцэтгэл ИТА", "position": "Материалын инженер",   "email": "bilguun@inel.mn",     "role": "site_engineer" },
+  { "no": 20, "name": "Ж.Номиун-Үжин",  "unit": "Төслийн гүйцэтгэл ИТА", "position": "Туслах инженер",       "email": "nomiun-ujin@inel.mn", "role": "site_engineer" },
+  { "no": 12, "name": "Д.Замилан",      "unit": "ХАБЭА",                 "position": "ХАБЭА",                "email": "zamilan@inel.mn",     "role": "site_engineer" },
+
+  { "no": 21, "name": "Ч.Энхтайван",    "unit": "Төслийн гүйцэтгэл ИТА", "position": "Оператор, жолооч",     "email": "enkhtaivan@inel.mn",  "role": "machine_operator" }
+]

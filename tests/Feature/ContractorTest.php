@@ -15,6 +15,7 @@ use Tests\TestCase;
  * Тиймээс кодыг ХЭН олгож, ХЭН харж чадахыг сервер шийднэ — дэлгэц дээр
  * товч нуух нь хамгаалалт биш.
  */
+// ЗАХИРАЛ ГҮЙЦЭТГЭГЧ УДИРДАХГҮЙ болсон — админ, төслийн менежер хоёр л удирдана.
 class ContractorTest extends TestCase
 {
     use RefreshDatabase;
@@ -70,7 +71,7 @@ class ContractorTest extends TestCase
     {
         $contractor = $this->contractor();
 
-        $code = $this->actingAs($this->user('director'))
+        $code = $this->actingAs($this->user('admin'))
             ->postJson("/api/v1/contractors/{$contractor->id}/access-code")
             ->assertOk()
             ->json('data.accessCode');
@@ -150,7 +151,7 @@ class ContractorTest extends TestCase
     {
         $contractor = $this->contractor();
 
-        $code = $this->actingAs($this->user('director'))
+        $code = $this->actingAs($this->user('admin'))
             ->postJson("/api/v1/contractors/{$contractor->id}/access-code")
             ->json('data.accessCode');
 
@@ -231,7 +232,7 @@ class ContractorTest extends TestCase
             ->json('data.token');
 
         $this->app['auth']->forgetGuards();
-        $this->actingAs($this->user('director'))
+        $this->actingAs($this->user('admin'))
             ->deleteJson("/api/v1/contractors/{$contractor->id}/access-code")
             ->assertOk()
             ->assertJsonPath('meta.signedOutDevices', 1);

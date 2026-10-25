@@ -102,7 +102,12 @@ class WorkTypeController extends Controller
             ->withCount('workItems')
             ->when($request->query('groupId'), fn ($q, $v) => $q->where('work_type_group_id', $v))
             ->when($request->query('level'), fn ($q, $v) => $q->where('level', $v))
-            ->when($request->query('search'), fn ($q, $v) => $q->where('name', 'like', "%{$v}%"))
+            // Кодоор ч хайна: инженер төсвийн мөрөө гартаа барьж суудаг.
+            ->when($request->query('search'), fn ($q, $v) => $q->where(
+                fn ($w) => $w->where('name', 'like', "%{$v}%")
+                    ->orWhere('code', 'like', "%{$v}%")
+                    ->orWhere('code_part', 'like', "%{$v}%"),
+            ))
             ->orderBy('sequence_number');
 
         return WorkTypeResource::collection($query->get());
@@ -119,10 +124,16 @@ class WorkTypeController extends Controller
 
         $validated = $request->validate($this->rules());
 
+        $this->guardDuplicateCode(
+            $this->clean($validated['code'] ?? null),
+            $this->clean($validated['codePart'] ?? null),
+        );
+
         $workType = WorkType::create([
             'work_type_group_id' => $validated['groupId'],
             'name' => $validated['name'],
-            'code' => $validated['code'] ?? null,
+            'code' => $this->clean($validated['code'] ?? null),
+            'code_part' => $this->clean($validated['codePart'] ?? null),
             'unit' => $validated['unit'],
             'level' => $validated['level'],
             'sequence_number' => $validated['sequenceNumber'] ?? $this->nextTypeSequence(),
@@ -159,11 +170,28 @@ class WorkTypeController extends Controller
         $workType->update(array_filter([
             'work_type_group_id' => $validated['groupId'] ?? null,
             'name' => $validated['name'] ?? null,
-            'code' => $validated['code'] ?? null,
             'unit' => $validated['unit'] ?? null,
             'level' => $validated['level'] ?? null,
             'sequence_number' => $validated['sequenceNumber'] ?? null,
         ], fn ($v) => $v !== null));
+
+        /*
+         * Код нь АРИЛГАГДАЖ ч болох ёстой.
+         *
+         * Бусад талбарыг `array_filter`-ээр шүүдэг нь «илгээгээгүйг
+         * бүү хөнд» гэсэн утгатай. Гэвч код дээр энэ нь буруугаар
+         * бичигдсэн кодыг мөнхөд тогтоож орхино — хоосон илгээвэл
+         * цэвэрлэх боломжтой байх ёстой.
+         */
+        foreach (['code' => 'code', 'codePart' => 'code_part'] as $input => $column) {
+            if ($request->has($input)) {
+                $workType->{$column} = $this->clean($validated[$input] ?? null);
+            }
+        }
+
+        $this->guardDuplicateCode($workType->code, $workType->code_part, $workType->id);
+
+        $workType->save();
 
         return response()->json(['data' => new WorkTypeResource($workType->refresh()->load('group'))]);
     }
@@ -194,10 +222,47 @@ class WorkTypeController extends Controller
             'groupId' => [$required, 'uuid', 'exists:work_type_groups,id'],
             'name' => [$required, 'string', 'max:255'],
             'code' => ['nullable', 'string', 'max:50'],
+            'codePart' => ['nullable', 'string', 'max:255'],
             'unit' => [$required, 'string', 'max:20'],
             'level' => [$required, Rule::in(WorkType::LEVELS)],
             'sequenceNumber' => ['nullable', 'integer', 'min:0'],
         ];
+    }
+
+    /** Хоосон мөр нь «код алга» гэсэн үг — хоосон тэмдэгт мөр биш. */
+    private function clean(?string $value): ?string
+    {
+        $value = trim((string) $value);
+
+        return $value === '' ? null : $value;
+    }
+
+    /**
+     * Ижил «код + бүрдэл» хоёр удаа бүртгэгдэхээс сэргийлнэ.
+     *
+     * ЯАГААД ЧУХАЛ ВЭ: импорт нь `код → төрөл` гэсэн толь барьж, нэг
+     * кодыг ЭХЛЭЭД таарсан төрөлд олгодог. Хоёр төрөл ижил кодтой бол
+     * хоёр дахь нь хэзээ ч сонгогдохгүй — чимээгүй, бас барихад хэцүү.
+     *
+     * «17.1.6» шиг нэг код олон ажилд хуваагдаж БОЛНО, гэхдээ тэдгээр
+     * нь бүрдлээрээ ялгаатай байх ёстой.
+     */
+    private function guardDuplicateCode(?string $code, ?string $part, ?string $ignoreId = null): void
+    {
+        if ($code === null) {
+            return;
+        }
+
+        $exists = WorkType::where('code', $code)
+            ->when($part === null, fn ($q) => $q->whereNull('code_part'))
+            ->when($part !== null, fn ($q) => $q->where('code_part', $part))
+            ->when($ignoreId, fn ($q, $id) => $q->whereKeyNot($id))
+            ->exists();
+
+        abort_if($exists, 422, $part === null
+            ? "«{$code}» кодтой ажлын төрөл аль хэдийн байна. Нэг кодыг хэд хуваах бол "
+                .'бүрдлийн нэрийг нь бичнэ үү.'
+            : "«{$code} · {$part}» аль хэдийн бүртгэгдсэн байна.");
     }
 
     private function nextGroupSequence(): int

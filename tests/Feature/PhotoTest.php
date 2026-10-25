@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Inspection;
 use App\Models\Block;
 use App\Models\Company;
 use App\Models\Location;
@@ -54,6 +55,8 @@ class PhotoTest extends TestCase
 
         $group = WorkTypeGroup::create(['name' => 'Угсралт', 'build_order' => 1]);
         $workType = WorkType::create([
+            // Каскад нь `TwoStageInspectionTest`-ийн ажил — энд нэг шат.
+            'inspection_stages' => 1,
             'work_type_group_id' => $group->id,
             'name' => 'Суурь угсралт',
             'unit' => 'м2',
@@ -288,7 +291,7 @@ class PhotoTest extends TestCase
 
         $this->actingAs($this->inspector, 'sanctum')
             ->postJson("/api/v1/work-items/{$this->item->id}/inspections", [
-                'stage' => 'client', 'result' => 'accepted', 'acceptedQty' => 40,
+                'stage' => Inspection::STAGE_FINAL, 'result' => 'accepted', 'acceptedQty' => 40,
             ])->assertCreated();
 
         $this->assertDatabaseHas('photos', ['id' => $id, 'locked' => true]);
@@ -308,8 +311,12 @@ class PhotoTest extends TestCase
             ->getJson("/api/v1/work-items/{$this->item->id}/photos")
             ->json('data.0.url');
 
-        // Гарын үсэгтэй хаяг ажиллана — `<img src>` толгой дамжуулж чаддаггүй.
-        $this->get($url)->assertOk();
+        /*
+         * Хаяг нь ХАРЬЦАНГУЙ — `/api/v1` угтвар нь проксигийн ажил. Урьд нь
+         * тест угтваргүй дуудаж 404 авдаг байсан (хажуугийн
+         * `test_the_relative_signature_is_accepted` нь зөв бичигдсэн).
+         */
+        $this->get('/api/v1'.$url)->assertOk();
 
         // Гарын үсэггүй бол хаалттай.
         $this->get("/api/v1/photos/{$id}/file")->assertForbidden();

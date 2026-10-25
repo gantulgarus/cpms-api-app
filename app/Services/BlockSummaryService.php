@@ -80,10 +80,12 @@ class BlockSummaryService
             ->selectRaw('sum('.WorkItem::progressSql('wi').') as progress_sum')
             // Хувийн ХУВААРЬ — тоо хэмжээгүй мөр үүнд ороогүй.
             ->selectRaw('sum('.WorkItem::measurableSql('wi').') as measurable_items')
+            // Хариуцагчгүй ажлыг туслан гүйцэтгэгч ХАРАХГҮЙ.
+            ->selectRaw('sum('.WorkItem::unassignedSql('wi').') as unassigned_items')
             // Гурван харилцан үл огтлолцох бүлэг — нийлбэр нь ажлын тоотой тэнцэнэ.
             ->selectRaw("sum(case when wi.status = 'completed' then 1 else 0 end) as completed_items")
             ->selectRaw("sum(case when wi.status = 'in_progress' then 1 else 0 end) as in_progress_items")
-            ->selectRaw("sum(case when wi.review_state = 'pending' then 1 else 0 end) as pending_inspections")
+            ->selectRaw('sum('.WorkItem::pendingSql('wi').') as pending_inspections')
             /*
              * Бүлгийн ажлын ЦОНХ — хамгийн эрт эхлэх, хамгийн сүүл дуусах.
              *
@@ -150,6 +152,7 @@ class BlockSummaryService
                     ? (int) round((float) $row->progress_sum / (int) $row->measurable_items * 100)
                     : 0,
                 'unmeasuredItems' => max($items - (int) $row->measurable_items, 0),
+                'unassignedItems' => (int) $row->unassigned_items,
                 'completedItems' => (int) $row->completed_items,
                 'inProgressItems' => (int) $row->in_progress_items,
                 'notStartedItems' => max(
@@ -244,6 +247,7 @@ class BlockSummaryService
         $items = (int) array_sum(array_column($groups, 'workItems'));
         $progress = array_sum(array_map(fn ($r) => (float) $r->progress_sum, $rows));
         $measurable = (int) array_sum(array_map(fn ($r) => (int) $r->measurable_items, $rows));
+        $unassigned = (int) array_sum(array_map(fn ($r) => (int) $r->unassigned_items, $rows));
 
         return [
             'workItems' => $items,
@@ -252,6 +256,7 @@ class BlockSummaryService
             'acceptedQty' => round($accepted, 3),
             'percentage' => $measurable > 0 ? (int) round($progress / $measurable * 100) : 0,
             'unmeasuredItems' => max($items - $measurable, 0),
+            'unassignedItems' => $unassigned,
             'completedItems' => (int) array_sum(array_column($groups, 'completedItems')),
             'inProgressItems' => (int) array_sum(array_column($groups, 'inProgressItems')),
             'notStartedItems' => (int) array_sum(array_column($groups, 'notStartedItems')),

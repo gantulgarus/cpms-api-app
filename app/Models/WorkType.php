@@ -20,8 +20,11 @@ class WorkType extends Model
 
     public const LEVELS = ['block', 'floor', 'unit'];
 
+    protected $casts = ['inspection_stages' => 'integer'];
+
     protected $fillable = [
-        'work_type_group_id', 'name', 'code', 'unit', 'level', 'sequence_number',
+        'work_type_group_id', 'name', 'code', 'code_part', 'unit', 'level', 'sequence_number',
+        'inspection_stages', 'is_hold_point',
     ];
 
     public function group(): BelongsTo

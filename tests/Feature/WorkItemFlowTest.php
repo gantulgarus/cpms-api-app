@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Jobs\ApplyBlockDesign;
+use App\Models\Inspection;
 use App\Models\Block;
 use App\Models\BlockDesign;
 use App\Models\Company;
@@ -10,6 +11,7 @@ use App\Models\Location;
 use App\Models\Project;
 use App\Models\User;
 use App\Models\WorkItem;
+use App\Models\WorkType;
 use Database\Seeders\WorkTypeSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -30,11 +32,24 @@ class WorkItemFlowTest extends TestCase
     private User $engineer;
     private User $inspector;
 
+    private User $planner;
+
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->seed(WorkTypeSeeder::class);
+
+        /*
+         * Эдгээр тест нь каскадын тухай БИШ — чанарын хуудас, тоо хэмжээ,
+         * дараалал, хамрах хүрээний тухай. Тиймээс ажлын төрлийг НЭГ
+         * шаттай болгоно: хоёр шатыг дамжуулбал тест бүр каскадтай
+         * холбогдож, шатны дүрэм өөрчлөгдөх бүрд 25 тест зэрэг унана —
+         * яг тэр болсон.
+         *
+         * Каскадыг `TwoStageInspectionTest` шалгана.
+         */
+        WorkType::query()->update(['inspection_stages' => 1]);
 
         $company = Company::create(['name' => 'Инэл ХХК']);
         $this->project = $company->projects()->create([
@@ -59,8 +74,19 @@ class WorkItemFlowTest extends TestCase
         // Мэдээлэх ба батлах эрх салсан тул хоёр хэрэглэгч хэрэгтэй.
         $this->engineer = User::factory()->create(['role' => 'site_engineer']);
         $this->inspector = User::factory()->create(['role' => 'inspector']);
+        /*
+         * Хугацаа сунгах нь ТӨЛӨВЛӨЛТИЙН шийдвэр (`canEditPlan`) — хяналтын
+         * инженерийн эрхэд ОРОХГҮЙ. Эдгээр тест урьд нь хяналтын инженерээр
+         * сунгахыг хүлээж байсан тул 403 аваад уначихдаг байв: сервер
+         * хэдийнэ хатуу болсон, тест хоцорсон.
+         */
+        $this->planner = User::factory()->create(['role' => 'project_manager']);
 
-        $this->actingAs(User::factory()->create(['role' => 'director']), 'sanctum');
+        /*
+         * Захирал юу ч БАТАЛДАГГҮЙ болсон тул анхдагч жүжигчин нь
+         * админ. Тестүүд шалгалт хийдэг тул батлах эрхтэй хүн хэрэгтэй.
+         */
+        $this->actingAs(User::factory()->create(['role' => 'admin']), 'sanctum');
     }
 
     /** Гүйцэтгэл мэдээлэхэд талбайн инженерээр ажиллана. */
@@ -178,7 +204,7 @@ class WorkItemFlowTest extends TestCase
 
         $item->refresh();
         $this->assertEqualsWithDelta(10, (float) $item->reported_qty, 0.001);
-        $this->assertSame('pending', $item->review_state);
+        $this->assertSame('pending_approval', $item->review_state);
         // Үлдэгдэл нь БАТЛАГДСАНААС бодогдоно — мэдээлсэн нь хараахан тоологдохгүй.
         $this->assertEqualsWithDelta((float) $item->planned_qty, $item->remaining_qty, 0.001);
     }
@@ -190,7 +216,7 @@ class WorkItemFlowTest extends TestCase
             ->postJson("/api/v1/work-items/{$item->id}/progress", ['completedQty' => 10])->assertCreated();
 
         $this->asInspector()->postJson("/api/v1/work-items/{$item->id}/inspections", [
-            'stage' => 'client', 'result' => 'accepted', 'acceptedQty' => 10,
+            'stage' => Inspection::STAGE_FINAL, 'result' => 'accepted', 'acceptedQty' => 10,
         ])->assertCreated();
 
         $item->refresh();
@@ -205,15 +231,15 @@ class WorkItemFlowTest extends TestCase
             ->postJson("/api/v1/work-items/{$item->id}/progress", ['completedQty' => 10])->assertCreated();
 
         $this->asInspector()->postJson("/api/v1/work-items/{$item->id}/inspections", [
-            'stage' => 'client', 'result' => 'rejected', 'acceptedQty' => 0,
+            'stage' => Inspection::STAGE_FINAL, 'result' => 'rejected', 'acceptedQty' => 0,
         ])->assertStatus(422)->assertJsonValidationErrorFor('reason');
 
         $this->postJson("/api/v1/work-items/{$item->id}/inspections", [
-            'stage' => 'client', 'result' => 'rejected', 'acceptedQty' => 0,
+            'stage' => Inspection::STAGE_FINAL, 'result' => 'rejected', 'acceptedQty' => 0,
             'reason' => 'Гадаргуугийн тэгш байдал зөрсөн',
         ])->assertCreated();
 
-        $this->assertSame('returned', $item->refresh()->review_state);
+        $this->assertSame('returned_by_final', $item->refresh()->review_state);
     }
 
     /**
@@ -235,12 +261,12 @@ class WorkItemFlowTest extends TestCase
             ->assertCreated();
 
         $this->asInspector()->postJson("/api/v1/work-items/{$item->id}/inspections", [
-            'stage' => 'client', 'result' => 'rejected', 'acceptedQty' => 0,
+            'stage' => Inspection::STAGE_FINAL, 'result' => 'rejected', 'acceptedQty' => 0,
             'reason' => 'Дахин хийнэ',
         ])->assertCreated();
 
         $item->refresh();
-        $this->assertSame('returned', $item->review_state);
+        $this->assertSame('returned_by_final', $item->review_state);
         $this->assertEqualsWithDelta(0, (float) $item->reported_qty, 0.001,
             'Татгалзсан хэмжээ мэдээлсэн дүнгээс хасагдах ёстой.');
         $this->assertEqualsWithDelta(100, $item->remaining_qty, 0.001,
@@ -251,10 +277,10 @@ class WorkItemFlowTest extends TestCase
             ->postJson("/api/v1/work-items/{$item->id}/progress", ['completedQty' => 100])
             ->assertCreated();
 
-        $this->assertSame('pending', $item->refresh()->review_state);
+        $this->assertSame('pending_approval', $item->refresh()->review_state);
 
         $this->asInspector()->postJson("/api/v1/work-items/{$item->id}/inspections", [
-            'stage' => 'client', 'result' => 'accepted', 'acceptedQty' => 100,
+            'stage' => Inspection::STAGE_FINAL, 'result' => 'accepted', 'acceptedQty' => 100,
         ])->assertCreated();
 
         $item->refresh();
@@ -273,7 +299,7 @@ class WorkItemFlowTest extends TestCase
             ->postJson("/api/v1/work-items/{$item->id}/progress", ['completedQty' => 10])
             ->assertCreated();
         $this->asInspector()->postJson("/api/v1/work-items/{$item->id}/inspections", [
-            'stage' => 'client', 'result' => 'rejected', 'acceptedQty' => 0,
+            'stage' => Inspection::STAGE_FINAL, 'result' => 'rejected', 'acceptedQty' => 0,
             'reason' => 'Дахин хийнэ',
         ])->assertCreated();
 
@@ -291,7 +317,7 @@ class WorkItemFlowTest extends TestCase
             ->assertCreated();
 
         $this->asInspector()->postJson("/api/v1/work-items/{$item->id}/inspections", [
-            'stage' => 'client', 'result' => 'partial', 'acceptedQty' => 60,
+            'stage' => Inspection::STAGE_FINAL, 'result' => 'partial', 'acceptedQty' => 60,
             'reason' => 'Хэсэгчлэн хүлээж авав',
         ])->assertCreated();
 
@@ -299,7 +325,7 @@ class WorkItemFlowTest extends TestCase
         $this->assertEqualsWithDelta(60, (float) $item->reported_qty, 0.001);
         $this->assertEqualsWithDelta(60, (float) $item->accepted_qty, 0.001);
         $this->assertEqualsWithDelta(40, $item->remaining_qty, 0.001);
-        $this->assertSame('returned', $item->review_state);
+        $this->assertSame('returned_by_final', $item->review_state);
     }
 
     public function test_a_partial_acceptance_leaves_the_rest_pending_not_rejected(): void
@@ -315,13 +341,13 @@ class WorkItemFlowTest extends TestCase
             ->assertCreated();
 
         $response = $this->asInspector()->postJson("/api/v1/work-items/{$item->id}/inspections", [
-            'stage' => 'client', 'result' => 'accepted', 'acceptedQty' => 10,
+            'stage' => Inspection::STAGE_FINAL, 'result' => 'accepted', 'acceptedQty' => 10,
         ])->assertCreated();
 
         $item->refresh();
         $this->assertEqualsWithDelta(0, (float) $response->json('data.rejectedQty'), 0.001);
         $this->assertEqualsWithDelta(40, (float) $item->reported_qty, 0.001);
-        $this->assertSame('pending', $item->review_state);
+        $this->assertSame('pending_approval', $item->review_state);
     }
 
     public function test_the_total_redone_quantity_is_visible_on_the_work_item(): void
@@ -334,14 +360,15 @@ class WorkItemFlowTest extends TestCase
             ->postJson("/api/v1/work-items/{$item->id}/progress", ['completedQty' => 100])
             ->assertCreated();
         $this->asInspector()->postJson("/api/v1/work-items/{$item->id}/inspections", [
-            'stage' => 'client', 'result' => 'rejected', 'acceptedQty' => 0,
+            'stage' => Inspection::STAGE_FINAL, 'result' => 'rejected', 'acceptedQty' => 0,
             'reason' => 'Дахин хийнэ',
         ])->assertCreated();
 
         $this->asEngineer()
             ->getJson("/api/v1/work-items/{$item->id}")
             ->assertOk()
-            ->assertJsonPath('data.rejectedTotal', 100.0);
+            // JSON-д 100.0 нь 100 болж цувдаг тул ТООГООР харьцуулна.
+            ->assertJsonPath('data.rejectedTotal', fn ($v) => abs((float) $v - 100) < 0.001);
     }
 
     /**
@@ -360,13 +387,22 @@ class WorkItemFlowTest extends TestCase
             ->postJson("/api/v1/work-items/{$item->id}/progress", ['completedQty' => 100])
             ->assertCreated();
         $this->asInspector()->postJson("/api/v1/work-items/{$item->id}/inspections", [
-            'stage' => 'client', 'result' => 'rejected', 'acceptedQty' => 0,
+            'stage' => Inspection::STAGE_FINAL, 'result' => 'rejected', 'acceptedQty' => 0,
             'reason' => 'Дахин хийнэ',
         ])->assertCreated();
 
         // Хуучин дүрмээр хадгалагдсан байдлыг дуурайлгана.
-        $item->forceFill(['reported_qty' => 100, 'review_state' => 'returned'])->saveQuietly();
-        $this->assertEqualsWithDelta(0, $item->fresh()->remaining_qty, 0.001);
+        $item->forceFill(['reported_qty' => 100, 'review_state' => 'returned_by_final'])->saveQuietly();
+
+        /*
+         * Хуучирсан нь `reported_qty` — ҮЛДЭГДЭЛ биш.
+         *
+         * Урьд нь энд «үлдэгдэл 0» гэж шалгадаг байсан. Гэвч үлдэгдэл нь
+         * `төлөвлөсөн − БАТЛАГДСАН`-аас бодогддог тул мэдээлсэн тоо
+         * хуучирсан ч хөдлөхгүй. Шалгуур нь кодын бодит дүрэмтэй зөрж
+         * байсан — зөвхөн өмнөх алдаа нуусан учраас л унаагүй.
+         */
+        $this->assertEqualsWithDelta(100, (float) $item->fresh()->reported_qty, 0.001);
 
         $this->artisan('cpms:recalculate')->assertSuccessful();
 
@@ -393,13 +429,20 @@ class WorkItemFlowTest extends TestCase
         $item = $this->workItemWithQuantity();
         $item->update(['planned_end_date' => now()->subDays(5)->toDateString()]);
 
-        $this->actingAs($this->engineer, 'sanctum')
+        /*
+         * Сунгалт нь одоо ХҮСЭЛТ — энэ тестийн хүрээ валидаци.
+         *
+         * Эрхийн хуваарилалт, батлах урсгалыг `ExtensionRequestTest` бүрэн
+         * шалгана. Урьд нь энд «хэн сунгаж болох» гэдгийг ч шалгадаг байсан
+         * тул эрх өөрчлөгдөхөд хоёр файл зэрэг унадаг байв.
+         */
+        $this->actingAs($this->planner, 'sanctum')
             ->postJson("/api/v1/work-items/{$item->id}/extend", [
                 'plannedEndDate' => now()->addDays(7)->toDateString(),
             ])
             ->assertStatus(422);
 
-        $this->asInspector()
+        $this->actingAs($this->planner, 'sanctum')
             ->postJson("/api/v1/work-items/{$item->id}/extend", [
                 'plannedEndDate' => now()->addDays(7)->toDateString(),
                 'category' => 'weather',
@@ -412,11 +455,19 @@ class WorkItemFlowTest extends TestCase
     {
         $item = $this->workItemWithQuantity();
         $old = now()->subDays(5)->toDateString();
-        $item->update(['planned_end_date' => $old]);
+        $item->update(['planned_end_date' => $old, 'baseline_end_date' => $old]);
 
         $new = now()->addDays(10)->toDateString();
 
-        $this->asInspector()
+        /*
+         * ЕРӨНХИЙ ИНЖЕНЕР сунгавал шууд батлагдана.
+         *
+         * Төслийн менежер батлах эрхгүй: хуваарийн гулсалтыг хамгийн их
+         * нуумаар байдаг хүн нь тэр хуваарийг хариуцдаг хүн.
+         */
+        $chief = User::factory()->create(['role' => 'general_engineer']);
+
+        $this->actingAs($chief, 'sanctum')
             ->postJson("/api/v1/work-items/{$item->id}/extend", [
                 'plannedEndDate' => $new,
                 'category' => 'material_shortage',
@@ -426,6 +477,10 @@ class WorkItemFlowTest extends TestCase
 
         $this->assertSame($new, $item->fresh()->planned_end_date->toDateString());
         $this->assertSame(0, $item->fresh()->overdue_days, 'Сунгасны дараа хоцролт үлдэх ёсгүй.');
+
+        // ҮНДСЭН огноо нь ХЭВЭЭР — гулсалтыг нуух арга байх ёсгүй.
+        $this->assertSame($old, $item->fresh()->baseline_end_date->toDateString());
+        $this->assertGreaterThan(0, $item->fresh()->baseline_overdue_days);
 
         $issue = $item->issues()->latest('created_at')->firstOrFail();
         $this->assertSame('material_shortage', $issue->category);
@@ -442,25 +497,81 @@ class WorkItemFlowTest extends TestCase
         $item = $this->workItemWithQuantity();
         $item->update(['planned_end_date' => now()->addDays(10)->toDateString()]);
 
-        $this->asInspector()
+        $this->actingAs($this->planner, 'sanctum')
             ->postJson("/api/v1/work-items/{$item->id}/extend", [
                 'plannedEndDate' => now()->addDays(2)->toDateString(),
                 'category' => 'weather',
-                'reason' => 'Урагшлуулах гэсэн',
+                'reason' => 'Урагшлуулах гэсэн оролдлого.',
             ])
             ->assertStatus(422);
     }
 
-    public function test_a_contractor_cannot_extend_a_deadline(): void
+    /**
+     * Гүйцэтгэгч ХҮСЭЛТ гаргаж болно, гэхдээ огноо ХӨДЛӨХГҮЙ.
+     *
+     * Урьд нь гүйцэтгэгчийг бүрэн хориглодог байв. Гэвч хуваарь хэтэрч
+     * байгааг хамгийн эрт мэддэг хүн нь тэр — хүсэлтийг хорихоос, баримт
+     * болгон бүртгээд ерөнхий инженерээр шийдүүлэх нь дээр. Шийдвэрийн
+     * эрх нь өөрчлөгдөөгүй.
+     */
+    public function test_a_contractor_may_request_but_not_decide(): void
     {
         $item = $this->workItemWithQuantity();
-        $rep = User::factory()->create(['role' => 'contractor']);
+
+        $contractor = \App\Models\Contractor::create(['name' => 'Түшиг Констракшн']);
+        $item->update(['contractor_id' => $contractor->id]);
+
+        $before = $item->fresh()->planned_end_date;
+
+        /*
+         * Шинэ огноог БАЙГАА огнооноос хойш бодно.
+         *
+         * Такт хуваарь нь ажлыг ирээдүйд товлодог тул `now()->addDays(7)` нь
+         * ТУХАЙН ажлын хугацаанаас өмнө байж болно — тэгвэл «урагш татаж
+         * байна» гэж зөв татгалзана.
+         */
+        $next = $before->copy()->addDays(7)->toDateString();
+
+        $rep = User::factory()->create([
+            'role' => 'contractor',
+            'contractor_id' => $contractor->id,
+        ]);
+
+        $id = $this->actingAs($rep, 'sanctum')
+            ->postJson("/api/v1/work-items/{$item->id}/extend", [
+                'plannedEndDate' => $next,
+                'category' => 'weather',
+                'reason' => 'Цас орсон тул гадна ажил боломжгүй байв.',
+            ])
+            ->assertStatus(202)
+            ->json('data.id');
+
+        $this->assertSame(
+            $before->toDateString(),
+            $item->fresh()->planned_end_date?->toDateString(),
+            'Хүсэлт нь шийдвэр биш — огноо хөдлөх ЁСГҮЙ.',
+        );
+
+        // Өөрийнхөө хүсэлтийг батлах оролдлого.
+        $this->actingAs($rep, 'sanctum')
+            ->postJson("/api/v1/extension-requests/{$id}/approve")
+            ->assertStatus(403);
+    }
+
+    /** ӨӨРИЙН БИШ ажилд гүйцэтгэгч хүсэлт гаргахгүй. */
+    public function test_a_contractor_cannot_request_on_another_contractors_work(): void
+    {
+        $item = $this->workItemWithQuantity();
+        $rep = User::factory()->create([
+            'role' => 'contractor',
+            'contractor_id' => \App\Models\Contractor::create(['name' => 'Өөр ХХК'])->id,
+        ]);
 
         $this->actingAs($rep, 'sanctum')
             ->postJson("/api/v1/work-items/{$item->id}/extend", [
-                'plannedEndDate' => now()->addDays(7)->toDateString(),
+                'plannedEndDate' => $item->planned_end_date->copy()->addDays(7)->toDateString(),
                 'category' => 'weather',
-                'reason' => 'Цас орсон',
+                'reason' => 'Бусдын ажилд хүсэлт гаргах оролдлого.',
             ])
             ->assertForbidden();
     }
@@ -538,11 +649,11 @@ class WorkItemFlowTest extends TestCase
         // Туслан гүйцэтгэгч өөрийгөө баталж чадахгүй.
         $this->actingAs(User::factory()->create(['role' => 'contractor']), 'sanctum')
             ->postJson("/api/v1/work-items/{$item->id}/inspections", [
-                'stage' => 'client', 'result' => 'accepted', 'acceptedQty' => 5,
+                'stage' => Inspection::STAGE_FINAL, 'result' => 'accepted', 'acceptedQty' => 5,
             ])->assertForbidden();
 
         $this->asInspector()->postJson("/api/v1/work-items/{$item->id}/inspections", [
-            'stage' => 'client', 'result' => 'accepted', 'acceptedQty' => 5,
+            'stage' => Inspection::STAGE_FINAL, 'result' => 'accepted', 'acceptedQty' => 5,
         ])->assertCreated();
     }
 
@@ -565,12 +676,12 @@ class WorkItemFlowTest extends TestCase
 
         $this->actingAs($dual->refresh(), 'sanctum')
             ->postJson("/api/v1/work-items/{$item->id}/inspections", [
-                'stage' => 'general_contractor', 'result' => 'accepted', 'acceptedQty' => 5,
+                'stage' => Inspection::STAGE_SITE, 'result' => 'accepted', 'acceptedQty' => 5,
             ])->assertForbidden();
 
         // Өөр хүн бол асуудалгүй.
         $this->asInspector()->postJson("/api/v1/work-items/{$item->id}/inspections", [
-            'stage' => 'general_contractor', 'result' => 'accepted', 'acceptedQty' => 5,
+            'stage' => Inspection::STAGE_SITE, 'result' => 'accepted', 'acceptedQty' => 5,
         ])->assertCreated();
     }
 

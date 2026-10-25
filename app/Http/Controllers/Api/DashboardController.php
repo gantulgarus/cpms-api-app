@@ -108,7 +108,10 @@ class DashboardController extends Controller
             ->selectRaw('sum('.WorkItem::progressSql('wi').') as progress_sum')
             // Хувийн ХУВААРЬ — тоо хэмжээгүй мөр үүнд ороогүй.
             ->selectRaw('sum('.WorkItem::measurableSql('wi').') as measurable_items')
-            ->selectRaw("sum(case when wi.review_state = 'pending' then 1 else 0 end) as pending")
+            // Хариуцагчгүй ажлыг гүйцэтгэгч ХАРАХГҮЙ — оноохоо мартвал
+            // тэр компани нэвтрээд хоосон дэлгэц хардаг.
+            ->selectRaw('sum('.WorkItem::unassignedSql('wi').') as unassigned_items')
+            ->selectRaw('sum('.WorkItem::pendingSql('wi').') as pending')
             ->selectRaw(
                 "sum(case when wi.status <> 'completed' and wi.planned_end_date < ? then 1 else 0 end) as overdue",
                 [now()->toDateString()]
@@ -125,6 +128,7 @@ class DashboardController extends Controller
         $inProgressItems = (int) $rows->sum(fn ($r) => (int) $r->in_progress_items);
         $progressSum = (float) $rows->sum(fn ($r) => (float) $r->progress_sum);
         $measurableItems = (int) $rows->sum(fn ($r) => (int) $r->measurable_items);
+        $unassignedItems = (int) $rows->sum(fn ($r) => (int) $r->unassigned_items);
 
         return response()->json([
             'data' => [
@@ -146,6 +150,7 @@ class DashboardController extends Controller
                  * Гүйцэтгэл оруулах боломжгүй тул хувьд ч ороогүй.
                  */
                 'unmeasuredItems' => max($totalItems - $measurableItems, 0),
+                'unassignedItems' => $unassignedItems,
                 'totalItems' => $totalItems,
                 'completedItems' => $completedItems,
                 'inProgressItems' => $inProgressItems,
@@ -165,6 +170,7 @@ class DashboardController extends Controller
                         (int) $r->total_items - (int) $r->measurable_items,
                         0
                     ),
+                    'unassignedItems' => (int) $r->unassigned_items,
                     'totalItems' => (int) $r->total_items,
                     'completedItems' => (int) $r->completed_items,
                     'inProgressItems' => (int) $r->in_progress_items,

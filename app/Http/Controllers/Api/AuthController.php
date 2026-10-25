@@ -85,15 +85,40 @@ class AuthController extends Controller
                 // шаардлагагүй, нэг эх сурвалж (`User::ROLES`) байна.
                 'roleLabel' => User::ROLES[$user->role] ?? $user->role,
                 'contractorId' => $user->contractor_id,
+                /*
+                 * АЛБАН ТУШААЛ — үүргээс ӨӨР.
+                 *
+                 * Үүрэг нь эрхийг тодорхойлно («хяналтын инженер»), албан
+                 * тушаал нь хүний бодит ажил («Гэрээний мэргэжилтэн»).
+                 * Б.Сайхантамир нь гэрээний мэргэжилтэн атлаа системд
+                 * хяналтын инженерийн эрхтэй — хоёрыг нэгтгэж болохгүй.
+                 */
+                'position' => $user->position,
                 'scopeBlockIds' => $user->scope_block_ids ?? [],
                 // Эрхийг СЕРВЕР шийднэ. Дэлгэц үүргийн жагсаалтыг давхардуулж
                 // мэдэх шаардлагагүй — товч харуулах эсэхийг эндээс уншина.
                 'canReportProgress' => $user->canReportProgress(),
                 'canInspect' => $user->canInspect(),
+                // 1-р шат нь батлахаас ӨРГӨН — талбайн инженер мөн хийнэ.
+                'canCheck' => $user->canCheck(),
                 'canManageContractors' => $user->canManageContractors(),
+                'canAssignInspectors' => $user->canAssignInspectors(),
+                'canApproveExtensions' => in_array(
+                    $user->role,
+                    \App\Models\ExtensionRequest::APPROVER_ROLES,
+                    true,
+                ),
                 'canManageUsers' => $user->canManageUsers(),
                 'canManageReferenceData' => $user->canManageReferenceData(),
                 'canEditPlan' => $user->canEditPlan(),
+                /*
+                 * МӨНГӨНИЙ мэдээлэл харах эрх — БАТЛАХААС тусдаа.
+                 *
+                 * Захирал юу ч батлахгүй ч тохиролцоо, акт, блокийн
+                 * тайланг харах ёстой. Талбайн инженер эсрэгээрээ:
+                 * ажил шалгана ч мөнгө харахгүй.
+                 */
+                'canSeeMoney' => $user->canSeeMoney(),
             ],
         ]);
     }

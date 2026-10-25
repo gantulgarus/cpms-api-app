@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Jobs\ApplyBlockDesign;
+use App\Models\Inspection;
 use App\Models\Block;
 use App\Models\BlockDesign;
 use App\Models\Company;
@@ -10,6 +11,7 @@ use App\Models\Contractor;
 use App\Models\Project;
 use App\Models\User;
 use App\Models\WorkItem;
+use App\Models\WorkType;
 use Database\Seeders\WorkTypeSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -39,6 +41,17 @@ class ContractorScopeTest extends TestCase
         parent::setUp();
 
         $this->seed(WorkTypeSeeder::class);
+
+        /*
+         * Эдгээр тест нь каскадын тухай БИШ — чанарын хуудас, тоо хэмжээ,
+         * дараалал, хамрах хүрээний тухай. Тиймээс ажлын төрлийг НЭГ
+         * шаттай болгоно: хоёр шатыг дамжуулбал тест бүр каскадтай
+         * холбогдож, шатны дүрэм өөрчлөгдөх бүрд 25 тест зэрэг унана —
+         * яг тэр болсон.
+         *
+         * Каскадыг `TwoStageInspectionTest` шалгана.
+         */
+        WorkType::query()->update(['inspection_stages' => 1]);
 
         $company = Company::create(['name' => 'Инэл ХХК']);
         $project = $company->projects()->create(['name' => 'Цогцолбор', 'status' => 'active']);
@@ -225,7 +238,7 @@ class ContractorScopeTest extends TestCase
         $this->assertSame(5.0, (float) $item->reported_qty);
         // Мэдээлсэн нь батлагдсан гэсэн үг БИШ — үлдэгдэл хөдлөхгүй.
         $this->assertSame(0.0, (float) $item->accepted_qty);
-        $this->assertSame('pending', $item->review_state);
+        $this->assertSame('pending_approval', $item->review_state);
     }
 
     public function test_contractor_cannot_report_on_another_contractors_work(): void
@@ -248,7 +261,7 @@ class ContractorScopeTest extends TestCase
         // Гомдлын гол шалтгаан: v1-д гүйцэтгэгч өөрийгөө баталж чаддаг байв.
         $this->asRep()
             ->postJson("/api/v1/work-items/{$item->id}/inspections", [
-                'stage' => 'client',
+                'stage' => Inspection::STAGE_FINAL,
                 'result' => 'accepted',
                 'acceptedQty' => 5,
             ])

@@ -109,7 +109,9 @@ class DemoSeeder extends Seeder
             }
 
             $this->assignContractors($block);
-            $this->simulateProgress($block, $users['engineer'], $users['inspector'], $front);
+            $this->simulateProgress(
+                $block, $users['engineer'], $users['checker'], $users['inspector'], $front
+            );
 
             /*
              * Блокийн төлөвийг ЯВЦААС нь гаргана.
@@ -146,8 +148,9 @@ class DemoSeeder extends Seeder
             [
                 ['admin@cpms.mn', 'password', 'Админ — бүх эрх'],
                 ['director@cpms.mn', 'password', 'Захирал — бүх блок'],
-                ['engineer@cpms.mn', 'password', 'Талбайн инженер — зөвхөн А блок'],
-                ['inspector@cpms.mn', 'password', 'Хяналтын инженер'],
+                ['engineer@cpms.mn', 'password', 'Талбайн инженер — гүйцэтгэл мэдээлнэ'],
+                ['checker@cpms.mn', 'password', 'Талбайн инженер — 1-р шат шалгана'],
+                ['inspector@cpms.mn', 'password', 'Хяналтын инженер — 2-р шат батална'],
             ],
         );
 
@@ -200,6 +203,15 @@ class DemoSeeder extends Seeder
             'admin' => $make('admin@cpms.mn', 'Системийн админ', 'admin'),
             'director' => $make('director@cpms.mn', 'Б.Батбаяр', 'director'),
             'engineer' => $make('engineer@cpms.mn', 'Б.Тамир', 'site_engineer'),
+            /*
+             * 1-р шатыг хийх ӨӨР талбайн инженер.
+             *
+             * `engineer` нь явцыг МЭДЭЭЛДЭГ хүн. Тэр өөрөө шалгавал
+             * «мэдээлэгч ба батлагч нэг хүн байж болохгүй» гэсэн дүрмийг
+             * demo өгөгдөл өөрөө зөрчиж, дэлгэц дээр бодит бус төлөв
+             * харагдана.
+             */
+            'checker' => $make('checker@cpms.mn', 'С.Ганзориг', 'site_engineer'),
             'inspector' => $make('inspector@cpms.mn', 'Д.Хулан', 'inspector'),
         ];
     }
@@ -473,6 +485,7 @@ class DemoSeeder extends Seeder
     private function simulateProgress(
         Block $block,
         User $engineer,
+        User $siteEngineer,
         User $inspector,
         int $progressFront,
     ): void {
@@ -529,16 +542,35 @@ class DemoSeeder extends Seeder
                 'updated_at' => $now,
             ];
 
-            if ($accepted > 0) {
+            /*
+             * ХОЁР шатны шалгалтыг тусад нь үүсгэнэ.
+             *
+             * Урьд нь нэг шалгалт («general_contractor») үүсгэдэг байсан.
+             * Хоёр шат болсон тул тэр нь бүх мөрийг `pending_approval`
+             * төлөвт гацуулна: шалгасан хэмжээ 0 байхад баталсан нь 0-ээс
+             * их байж чадахгүй.
+             *
+             * Demo нь ГУРВАН төлвийг харуулах ёстой — тэгвэл дараалал,
+             * самбар, актын дэлгэц бүгд агуулгатай болно:
+             *
+             *   · шалгагдаж баталгаажсан   → approved
+             *   · шалгагдсан, батлагдаагүй → pending_approval
+             *   · шалгагдаагүй             → pending_check
+             */
+            $slot = $floorNo % 3;
+            $checked = $slot === 2 ? 0.0 : $accepted;      // 3 дахь нь шалгагдаагүй
+            $finalQty = $slot === 0 ? $accepted : 0.0;     // зөвхөн 1 дэх нь батлагдсан
+
+            if ($checked > 0) {
                 $inspections[] = [
                     'id' => (string) \Illuminate\Support\Str::uuid7(),
                     'work_item_id' => $item->id,
-                    'inspector_id' => $inspector->id,
-                    'stage' => 'general_contractor',
-                    'result' => $accepted >= $reported ? 'accepted' : 'partial',
-                    'accepted_qty' => $accepted,
-                    'rejected_qty' => round($reported - $accepted, 3),
-                    'reason' => $accepted >= $reported ? null : 'Хэсэгчлэн хүлээн авав',
+                    'inspector_id' => $siteEngineer->id,
+                    'stage' => \App\Models\Inspection::STAGE_SITE,
+                    'result' => $checked >= $reported ? 'accepted' : 'partial',
+                    'accepted_qty' => $checked,
+                    'rejected_qty' => round(max($reported - $checked, 0), 3),
+                    'reason' => $checked >= $reported ? null : 'Хэсэгчлэн шалгав',
                     'rework_work_item_id' => null,
                     'inspected_at' => $now->copy()->subDays(28 - min($floorNo, 25)),
                     'created_at' => $now,
@@ -546,12 +578,44 @@ class DemoSeeder extends Seeder
                 ];
             }
 
+            if ($finalQty > 0) {
+                $inspections[] = [
+                    'id' => (string) \Illuminate\Support\Str::uuid7(),
+                    'work_item_id' => $item->id,
+                    'inspector_id' => $inspector->id,
+                    'stage' => \App\Models\Inspection::STAGE_FINAL,
+                    'result' => 'accepted',
+                    'accepted_qty' => $finalQty,
+                    'rejected_qty' => 0,
+                    'reason' => null,
+                    'rework_work_item_id' => null,
+                    'inspected_at' => $now->copy()->subDays(27 - min($floorNo, 25)),
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ];
+            }
+
+            /*
+             * Төлвийг шатны сангаар бодно — `WorkItem::resolveReviewState()`-тэй
+             * ижил дүрэм. Demo нь 3,711 мөр тул `recalculate()`-ийг мөр бүрд
+             * дуудахгүй, гараар бодно.
+             */
+            $reportedNet = round(max($reported - round(max($reported - $checked, 0), 3), 0), 3);
+
             $updates[] = [
                 'id' => $item->id,
-                'reported_qty' => $reported,
-                'accepted_qty' => $accepted,
-                'status' => $accepted >= (float) $item->planned_qty ? 'completed' : 'in_progress',
-                'review_state' => $accepted < $reported ? 'pending' : 'approved',
+                'reported_qty' => $reportedNet,
+                'checked_qty' => $checked,
+                'accepted_qty' => $finalQty,
+                'status' => $finalQty >= (float) $item->planned_qty && $item->planned_qty > 0
+                    ? 'completed'
+                    : ($reported > 0 ? 'in_progress' : 'not_started'),
+                'review_state' => match (true) {
+                    $checked < $reportedNet - 0.0005 => 'pending_check',
+                    $finalQty < $checked - 0.0005 => 'pending_approval',
+                    $reportedNet <= 0 => 'none',
+                    default => 'approved',
+                },
             ];
         }
 
@@ -568,6 +632,7 @@ class DemoSeeder extends Seeder
             foreach ($chunk as $u) {
                 DB::table('work_items')->where('id', $u['id'])->update([
                     'reported_qty' => $u['reported_qty'],
+                    'checked_qty' => $u['checked_qty'],
                     'accepted_qty' => $u['accepted_qty'],
                     'status' => $u['status'],
                     'review_state' => $u['review_state'],

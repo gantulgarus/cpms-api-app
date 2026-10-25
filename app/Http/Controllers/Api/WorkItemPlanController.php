@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\ExtensionRequestResource;
+use App\Services\ExtensionService;
 use App\Http\Resources\WorkItemResource;
 use App\Models\Block;
 use App\Models\DesignItem;
@@ -29,6 +31,9 @@ use Illuminate\Validation\Rule;
  */
 class WorkItemPlanController extends Controller
 {
+    /** Алгасах шалтгаан — статус тодорхойлоход хэрэглэгдэнэ. */
+    private const NO_LOCATION = 'Тохирох байршил алга';
+
     /**
      * PATCH /work-items/{workItem}
      *
@@ -191,7 +196,7 @@ class WorkItemPlanController extends Controller
                     ->get();
 
                 if ($targets->isEmpty()) {
-                    $skipped[] = ['name' => $workType->name, 'reason' => 'Тохирох байршил алга'];
+                    $skipped[] = ['name' => $workType->name, 'reason' => self::NO_LOCATION];
 
                     continue;
                 }
@@ -238,12 +243,31 @@ class WorkItemPlanController extends Controller
             }
         });
 
-        // Бүгд алгасагдвал хэрэглэгчид ямар нэг зүйл болсон мэт харагдах ёсгүй.
-        abort_if(
-            $created === 0,
-            409,
-            'Сонгосон ажлууд аль хэдийн нэмэгдсэн эсвэл тохирох байршил алга.'
-        );
+        /*
+         * Бүгд алгасагдвал хэрэглэгчид ямар нэг зүйл болсон мэт харагдах ёсгүй.
+         *
+         * Хоёр шалтгааныг ЯЛГАНА:
+         *
+         *   · байршил алга  → 422, хүсэлт нь өөрөө утгагүй. Айлгүй
+         *     үйлчилгээний барилгад айлын ажил нэмэх нь дахин оролдоод
+         *     өөрчлөгдөхгүй — хэрэглэгч өөр ажлын төрөл сонгох ёстой.
+         *   · аль хэдийн нэмэгдсэн → 409, бодит зөрчил.
+         *
+         * Урьд нь хоёулаа 409 байсан тул «яагаад болохгүй байгаа» нь
+         * статусаас уншигдахгүй, зөвхөн текстээс таамаглах байсан.
+         */
+        if ($created === 0) {
+            $noLocation = collect($skipped)->every(
+                fn ($row) => $row['reason'] === self::NO_LOCATION
+            );
+
+            abort(
+                $noLocation ? 422 : 409,
+                $noLocation
+                    ? 'Сонгосон ажлын төрөлд тохирох байршил блокт байхгүй.'
+                    : 'Сонгосон ажлууд аль хэдийн нэмэгдсэн.'
+            );
+        }
 
         return response()->json([
             'data' => ['created' => $created, 'skipped' => $skipped],
@@ -392,9 +416,20 @@ class WorkItemPlanController extends Controller
                             $item->workType->group?->build_order ?? TaktSchedule::DEFAULT_ORDER,
                         );
 
+                        /*
+                         * Такт хуваарийг дахин татах нь ДАХИН ТӨЛӨВЛӨЛТ,
+                         * сунгалт БИШ — тиймээс үндсэн огноо нь ч дагаж
+                         * шинэчлэгдэнэ.
+                         *
+                         * Эс бөгөөс давхрын хугацааг 5-аас 12 хоног болгоход
+                         * бүх ажил гэнэт «үндсэн төлөвлөгөөнөөс гулссан» гэж
+                         * харагдана — гулсалт нь хэнээс ч шалтгаалаагүй
+                         * хэдий ч.
+                         */
                         $item->update([
                             'planned_start_date' => $start,
                             'planned_end_date' => $end,
+                            'baseline_end_date' => $end,
                         ]);
                         $updated++;
                     }
@@ -424,58 +459,73 @@ class WorkItemPlanController extends Controller
      * Шалтгааныг АСУУДЛЫН бүртгэлд хадгална — тусдаа хүснэгт үүсгэх
      * шаардлагагүй бөгөөд хоцролтын статистик нэг дороос гарна.
      */
+    /**
+     * POST /work-items/{workItem}/extend
+     *
+     * Хугацаа сунгах ХҮСЭЛТ үүсгэнэ.
+     *
+     * ЯАГААД ХҮСЭЛТ ВЭ: урьд нь огноог ШУУД өөрчилдөг байв. Тиймээс
+     * «хугацаа хэтэрсэн» гэсэн тоо утгагүй болдог — хоцорсон хүн огноогоо
+     * хойшлуулаад хоцроогүй болчихно. Нэг товч дарахад тайлан өөрөө
+     * засагддаг бол тайлан хэнийг ч хянахгүй.
+     *
+     * Батлах эрхтэй хүн (ерөнхий инженер, захирал, админ) сунгавал хүсэлт
+     * нь ТЭР ДОР НЬ батлагдана — тэд эрх мэдэлтэй. Гэхдээ баримт үлдэнэ:
+     * хэн, хэзээ, ямар шалтгаанаар гэдэг нь бүртгэгдэнэ.
+     *
+     * Эрхээ ЭНД өргөн барина: талбайн инженер, гүйцэтгэгч ч хүсэлт
+     * гаргаж чадна — хуваарь хэтэрч байгааг хамгийн эрт мэддэг хүн тэд.
+     */
     public function extend(Request $request, WorkItem $workItem): JsonResponse
     {
-        $this->authorizeEdit($request);
+        $user = $request->user();
+
+        abort_unless(
+            $user?->canReportProgress() || $user?->canEditPlan(),
+            403,
+            'Танд хугацаа сунгах хүсэлт гаргах эрх байхгүй.'
+        );
+
+        // Гүйцэтгэгч зөвхөн ӨӨРИЙН ажилд хүсэлт гаргана.
+        abort_if(
+            $user->isContractorRep() && $workItem->contractor_id !== $user->contractor_id,
+            403,
+            'Энэ ажил таны хариуцлагад байхгүй.'
+        );
 
         $validated = $request->validate([
             'plannedEndDate' => ['required', 'date'],
             'category' => ['required', Rule::in(Issue::CATEGORIES)],
-            'reason' => ['required', 'string', 'max:2000'],
+            'reason' => ['required', 'string', 'min:10', 'max:2000'],
         ], [
             'plannedEndDate.required' => 'Шинэ дуусах огноог сонгоно уу.',
             'category.required' => 'Саатлын шалтгааныг сонгоно уу.',
             'reason.required' => 'Тайлбар бичнэ үү.',
+            'reason.min' => 'Тайлбар хэт тодорхойгүй — дор хаяж 10 тэмдэгт бичнэ үү.',
         ]);
 
-        $current = $workItem->planned_end_date;
-        $next = Carbon::parse($validated['plannedEndDate'])->startOfDay();
-
-        // Хойшлуулах нь сунгах — огноог УРАГШ татах нь өөр үйлдэл бөгөөд
-        // хоцролтыг хиймлээр үүсгэнэ.
-        abort_if(
-            $current && $next->lte($current),
-            422,
-            sprintf(
-                'Шинэ огноо одоогийнхоос (%s) хойш байх ёстой.',
-                $current?->toDateString() ?? '—'
-            )
+        $extension = app(ExtensionService::class)->request(
+            $workItem,
+            $user,
+            $validated['plannedEndDate'],
+            $validated['category'],
+            $validated['reason'],
         );
 
-        DB::transaction(function () use ($workItem, $next, $validated, $request, $current) {
-            $workItem->update(['planned_end_date' => $next->toDateString()]);
-
-            $workItem->issues()->create([
-                'reported_by_id' => $request->user()?->id,
-                'category' => $validated['category'],
-                'severity' => 'medium',
-                'status' => 'open',
-                // Хуучин огноог тайлбарт үлдээнэ — хэдэн хоногоор сунгасныг
-                // хожим тоолох боломжтой байх ёстой.
-                'description' => sprintf(
-                    'Хугацаа сунгав: %s → %s. %s',
-                    $current?->toDateString() ?? '—',
-                    $next->toDateString(),
-                    $validated['reason'],
-                ),
-            ]);
-        });
-
         return response()->json([
-            'data' => new WorkItemResource(
-                $workItem->refresh()->load(['location', 'workType.group', 'contractor'])
-            ),
-        ]);
+            'data' => new ExtensionRequestResource($extension->load(['requestedBy', 'decidedBy'])),
+            'meta' => [
+                /*
+                 * Дэлгэц хоёр тохиолдлыг ЯЛГАХ ёстой: батлагдсан бол огноо
+                 * хөдөлсөн, хүлээгдэж байгаа бол хөдлөөгүй. Нэг мессеж
+                 * харуулбал хэрэглэгч сунгалаа гэж бодоод явна.
+                 */
+                'applied' => $extension->status === 'approved',
+                'workItem' => new WorkItemResource(
+                    $workItem->refresh()->load(['location', 'workType.group', 'contractor'])
+                ),
+            ],
+        ], $extension->status === 'approved' ? 200 : 202);
     }
 
     private function authorizeEdit(Request $request): void

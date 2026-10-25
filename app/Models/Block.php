@@ -39,6 +39,12 @@ class Block extends Model
         return $this->hasMany(Location::class);
     }
 
+    /** Энэ блокийн тохиролцоонууд — блок устгахад дагаж устана. */
+    public function agreements(): HasMany
+    {
+        return $this->hasMany(Agreement::class);
+    }
+
     public function workItems(): HasMany
     {
         return $this->hasMany(WorkItem::class);

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Jobs\ApplyBlockDesign;
+use App\Models\Inspection;
 use App\Models\Block;
 use App\Models\BlockDesign;
 use App\Models\Company;
@@ -10,6 +11,7 @@ use App\Models\Contractor;
 use App\Models\Project;
 use App\Models\User;
 use App\Models\WorkItem;
+use App\Models\WorkType;
 use Database\Seeders\WorkTypeSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -36,6 +38,17 @@ class QueueAndIssueTest extends TestCase
         parent::setUp();
 
         $this->seed(WorkTypeSeeder::class);
+
+        /*
+         * Эдгээр тест нь каскадын тухай БИШ — чанарын хуудас, тоо хэмжээ,
+         * дараалал, хамрах хүрээний тухай. Тиймээс ажлын төрлийг НЭГ
+         * шаттай болгоно: хоёр шатыг дамжуулбал тест бүр каскадтай
+         * холбогдож, шатны дүрэм өөрчлөгдөх бүрд 25 тест зэрэг унана —
+         * яг тэр болсон.
+         *
+         * Каскадыг `TwoStageInspectionTest` шалгана.
+         */
+        WorkType::query()->update(['inspection_stages' => 1]);
 
         $company = Company::create(['name' => 'Инэл ХХК']);
         $this->project = $company->projects()->create(['name' => 'Цогцолбор', 'status' => 'active']);
@@ -119,7 +132,7 @@ class QueueAndIssueTest extends TestCase
         $this->assertSame(1, $this->getJson("/api/v1/projects/{$this->project->id}/queue")->json('meta.total'));
 
         $this->postJson("/api/v1/work-items/{$item->id}/inspections", [
-            'stage' => 'client',
+            'stage' => Inspection::STAGE_FINAL,
             'result' => 'accepted',
             'acceptedQty' => 5,
         ])->assertCreated();
@@ -134,7 +147,7 @@ class QueueAndIssueTest extends TestCase
 
         $this->actingAs($this->inspector, 'sanctum')
             ->postJson("/api/v1/work-items/{$item->id}/inspections", [
-                'stage' => 'client',
+                'stage' => Inspection::STAGE_FINAL,
                 'result' => 'rejected',
                 'acceptedQty' => 0,
                 'reason' => 'Чанар хангаагүй',
@@ -388,7 +401,7 @@ class QueueAndIssueTest extends TestCase
             $this->reportOn($item, (float) $item->planned_qty);
             $this->actingAs($this->inspector, 'sanctum')
                 ->postJson("/api/v1/work-items/{$item->id}/inspections", [
-                    'stage' => 'client',
+                    'stage' => Inspection::STAGE_FINAL,
                     'result' => 'accepted',
                     'acceptedQty' => (float) $item->planned_qty,
                 ])->assertCreated();
@@ -406,6 +419,29 @@ class QueueAndIssueTest extends TestCase
         $this->assertSame($fromDashboard['totalItems'], $fromPage['workItems']);
     }
 
+    /**
+     * SQL дэх хуваалт БҮХЭЛ ТООН хуваалт болж хувирахгүй.
+     *
+     * SQLite нь NUMERIC affinity-тай баганад бүхэл утгыг INTEGER болгож
+     * хадгалдаг тул `324 / 648` нь 0 гардаг. Самбарын хувь үүний улмаас
+     * бүхэл тоотой ажил бүрийг 0% гэж тоолж, хагас дууссан төслийг 43%
+     * (зөв нь 46%) гэж харуулж байв.
+     *
+     * Энэ тест нь хамгийн энгийн тохиолдлыг барина: хоёр бүхэл тоо.
+     */
+    public function test_a_whole_number_ratio_is_not_integer_divided(): void
+    {
+        $item = WorkItem::where('block_id', $this->block->id)->firstOrFail();
+        $item->forceFill(['planned_qty' => 648, 'accepted_qty' => 324])->saveQuietly();
+
+        $ratio = (float) DB::table('work_items')
+            ->where('id', $item->id)
+            ->selectRaw('('.WorkItem::progressSql('work_items').') as r')
+            ->value('r');
+
+        $this->assertEqualsWithDelta(0.5, $ratio, 0.0001, '648-аас 324 нь 50% — бүхэл хуваалт 0 гаргана.');
+    }
+
     public function test_percentage_gives_partial_credit(): void
     {
         // HTTP-ээр 3,290 мөрийг батлуулах нь удаан тул шууд бичнэ —
@@ -420,9 +456,108 @@ class QueueAndIssueTest extends TestCase
             ->getJson("/api/v1/projects/{$this->project->id}/dashboard")
             ->json('data');
 
+        /*
+         * Хүлээлтийг ӨГӨГДЛӨӨС, PHP-ээр дахин бодож шалгана.
+         *
+         * Урьд нь «50» гэж гараар бичигдсэн байсан. Гэвч `planned_qty / 2`
+         * нь мянгатын орон руу бөөрөнхийлөгддөг тул маш жижиг тоотой
+         * мөрүүд яг хагас болдоггүй — лавлах сан өсөхөд хүлээлт чимээгүй
+         * хоцорч, 43 vs 50 гэж уначихсан.
+         *
+         * Одоо тест нь ҮНЭН ЧАНАРААРАА «SQL ба PHP хоёр ижил тоо гаргаж
+         * байна уу» гэдгийг хэмжинэ — яг тэр хоёрын зөрүү нь бодит эрсдэл.
+         */
+        $rows = WorkItem::where('block_id', $this->block->id)
+            ->where('planned_qty', '>', 0)
+            ->get(['planned_qty', 'accepted_qty']);
+
+        $expected = (int) round(
+            $rows->sum(fn ($r) => min((float) $r->accepted_qty / (float) $r->planned_qty, 1.0))
+            / max($rows->count(), 1) * 100
+        );
+
         $this->assertSame(0, $d['completedItems']);
-        $this->assertSame(50, $d['percentage']);
-        $this->assertSame(50, $d['blocks'][0]['percentage']);
+
+        /*
+         * Хуваарь нь ЭХЛЭЭД таарах ёстой.
+         *
+         * Хувь зөрвөл шалтгаан нь хоёрын нэг: өөр мөр тоолсон (хуваарь),
+         * эсвэл өөр хуваалт хийсэн (хуваагдагч). Хуваарийг тусад нь
+         * шалгахгүй бол аль нь болохыг мэдэхгүй — зөвхөн «43 vs 46» гэсэн
+         * тоо үлдэнэ.
+         */
+        $sqlMeasurable = $d['totalItems'] - $d['unmeasuredItems'];
+
+        $this->assertSame(
+            $rows->count(),
+            $sqlMeasurable,
+            'Хэмжигдэх мөрийн тоо зөрөв — SQL ба PHP өөр багц дээр бодож байна.',
+        );
+
+        /*
+         * Томьёог ТУСГААРЛАЖ шалгана.
+         *
+         * Хуваарь таарч байгаа тул зөрүү нь `progressSql`-ийн дотор. Энэ
+         * мөр нь түүнийг шууд ажиллуулж, PHP-ийн ижил томьёотой тулгана —
+         * самбараар дамжуулбал «хаана зөрснийг» мэдэхгүй.
+         */
+        $phpSum = $rows->sum(fn ($r) => min((float) $r->accepted_qty / (float) $r->planned_qty, 1.0));
+
+        $sqlSum = (float) DB::table('work_items')
+            ->where('block_id', $this->block->id)
+            ->selectRaw('sum('.WorkItem::progressSql('work_items').') as s')
+            ->value('s');
+
+        /*
+         * Зөрсөн бол КОНКРЕТ мөрүүдийг нэрлэнэ.
+         *
+         * «SQL 854.5, PHP 918.9» гэсэн хоёр тоо нь шалтгааныг хэлэхгүй.
+         * Мөр бүрийн төлөвлөсөн, батлагдсан, хоёр талын харьцааг хажууд нь
+         * тавибал ямар тохиолдолд салж байгаа нь тэр дороо харагдана.
+         */
+        $sample = DB::table('work_items')
+            ->where('block_id', $this->block->id)
+            ->where('planned_qty', '>', 0)
+            ->selectRaw('planned_qty, accepted_qty, ('.WorkItem::progressSql('work_items').') as sql_ratio')
+            ->get()
+            ->map(fn ($r) => [
+                'planned' => (float) $r->planned_qty,
+                'accepted' => (float) $r->accepted_qty,
+                'sql' => round((float) $r->sql_ratio, 6),
+                'php' => round(min((float) $r->accepted_qty / (float) $r->planned_qty, 1.0), 6),
+            ])
+            ->filter(fn ($r) => abs($r['sql'] - $r['php']) > 0.0001)
+            ->take(6)
+            ->map(fn ($r) => sprintf(
+                'төл=%s батл=%s sql=%s php=%s',
+                $r['planned'], $r['accepted'], $r['sql'], $r['php'],
+            ))
+            ->implode(' | ');
+
+        $this->assertEqualsWithDelta(
+            $phpSum,
+            $sqlSum,
+            0.5,
+            sprintf(
+                "progressSql нь PHP-тэй зөрөв. SQL: %.4f · PHP: %.4f · мөр: %d\nЗөрсөн мөр: %s",
+                $sqlSum,
+                $phpSum,
+                $rows->count(),
+                $sample ?: '— (мөр бүр таарч байна, нийлбэр дээр л зөрж байна)',
+            ),
+        );
+
+        $this->assertSame(
+            $expected,
+            $d['percentage'],
+            sprintf('Самбар: %d%% · хүлээлт: %d%%', $d['percentage'], $expected),
+        );
+        $this->assertSame($expected, $d['blocks'][0]['percentage']);
+
+        // Хагас гүйцэтгэл нь 50%-ийн ЭРГЭН ТОЙРОНД байх ёстой — бөөрөнхийлөл
+        // 7 хувиас дээш хазайвал тоо хэмжээний нарийвчлал хүрэхгүй байна.
+        $this->assertGreaterThan(40, $expected);
+        $this->assertLessThan(60, $expected);
     }
 
     public function test_dashboard_block_totals_sum_to_the_project_total(): void

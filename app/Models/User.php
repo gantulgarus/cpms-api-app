@@ -39,13 +39,30 @@ class User extends Authenticatable
     ];
 
     /**
+     * ЗӨВХӨН ХАРАХ үүргүүд.
+     *
+     * Захирал нь юу ч БАТЛАХГҮЙ: шалгахгүй, батлахгүй, төсөв оруулахгүй,
+     * хэрэглэгч бүртгэхгүй. Түүний ажил нь явц, зардлыг ХАРАХ.
+     *
+     * ЯАГААД ЧУХАЛ ВЭ: удирдлагын эрхийг «бүх зүйлд хүрнэ» гэж ойлгох нь
+     * хяналтыг утгагүй болгодог. Захирал ажлыг батлах боломжтой бол
+     * «мэдээлэгч ба батлагч өөр хүн» гэсэн дүрмийг тойрох зам нээгдэнэ:
+     * хэн ч захирлаар батлуулж болно. Мөн 1,991 мөрийг захирал хардаггүй —
+     * батлах эрх нь зүгээр л ашиглагдахгүй эрсдэл болж үлддэг.
+     *
+     * МӨНГӨ ХАРАХ нь үлдэнэ: тохиролцоо, акт, төсвийн зөрүүг захирал
+     * мэдэх ёстой. Харах ба батлах хоёр өөр зүйл.
+     */
+    public const OBSERVER_ROLES = ['director'];
+
+    /**
      * Хэрэглэгч бүртгэх, үүрэг оноох эрх.
      *
-     * Зөвхөн админ ба захирал. Төслийн менежер гүйцэтгэгч нэмэх эрхтэй ч
-     * хүнд үүрэг оноох нь өөр зэрэглэлийн шийдвэр — хяналтын инженерийн
-     * эрхийг өөртөө өгөх боломж үүсэх ёсгүй.
+     * ЗӨВХӨН АДМИН. Захирал хасагдсан: үүрэг оноох боломжтой хүн өөртөө
+     * ямар ч эрх өгч чадна — тэр нь «юу ч батлахгүй» гэсэн дүрмийг
+     * нэг товчоор тойрох зам.
      */
-    public const USER_MANAGER_ROLES = ['admin', 'director'];
+    public const USER_MANAGER_ROLES = ['admin'];
 
     /** Бүх блокийг харах эрхтэй үүргүүд. */
     public const UNRESTRICTED_ROLES = ['admin', 'director', 'general_engineer'];
@@ -66,7 +83,7 @@ class User extends Authenticatable
      * тайлбар доторх `[БАТЛАВ]` текст байсан тул гүйцэтгэгч өөрийгөө баталж
      * чаддаг байв — захиалагчийн гомдлын гол шалтгаан.
      */
-    public const INSPECTOR_ROLES = ['inspector', 'general_engineer', 'director', 'admin'];
+    public const INSPECTOR_ROLES = ['inspector', 'general_engineer', 'admin'];
 
     public function canReportProgress(): bool
     {
@@ -78,10 +95,63 @@ class User extends Authenticatable
         return in_array($this->role, self::INSPECTOR_ROLES, true);
     }
 
+    /**
+     * 1-Р ШАТЫГ (талбайн шалгалт) хийх эрх.
+     *
+     * `canInspect()`-ЭЭС ӨРГӨН: талбайн инженер 1-р шатыг хийдэг ч
+     * эцсийн батлах эрхгүй. Хоёрыг нэг эрхээр хэмжвэл талбайн инженер
+     * шалгах форм огт харахгүй болж, хоёр шаттай урсгал гацна — яг
+     * тэр алдаа дэлгэц дээр гарсан.
+     *
+     * Эх сурвалж нь `Inspection::STAGE_ROLES` — хоёр газар жагсаалт
+     * бичихгүй.
+     */
+    public function canCheck(): bool
+    {
+        return in_array($this->role, Inspection::STAGE_ROLES[Inspection::STAGE_SITE], true);
+    }
+
+    /**
+     * Ажилд хяналтын инженер оноох эрх.
+     *
+     * Гүйцэтгэгч оноохоос (`canManageContractors`) САЛГАВ: гүйцэтгэгч оноох
+     * нь гэрээний шийдвэр, хяналтын инженер оноох нь дотоод хуваарилалт.
+     * Ерөнхий инженер хоёр дахийг шийдэх ёстой ч гэрээнд хүрэх эрхгүй.
+     */
+    public function canAssignInspectors(): bool
+    {
+        return in_array($this->role, ['admin', 'general_engineer', 'project_manager'], true);
+    }
+
     /** Гүйцэтгэгч бүртгэх, нэвтрэх код олгох эрх. */
     public function canManageContractors(): bool
     {
-        return in_array($this->role, ['admin', 'director', 'project_manager'], true);
+        return in_array($this->role, ['admin', 'project_manager'], true);
+    }
+
+    /**
+     * Зөвхөн харах үүрэг эсэх.
+     *
+     * Бичих эрхийн шалгалт бүр үүнийг ДАГАНА — шинэ дэлгэц нэмэхэд
+     * захирлыг тусад нь хасах шаардлагагүй болно.
+     */
+    public function isObserver(): bool
+    {
+        return in_array($this->role, self::OBSERVER_ROLES, true);
+    }
+
+    /**
+     * МӨНГӨНИЙ мэдээлэл харах эрх — тохиролцоо, акт, төсвийн дүн.
+     *
+     * Батлахаас ТУСДАА: захирал батлахгүй ч зардлаа мэдэх ёстой.
+     */
+    public function canSeeMoney(): bool
+    {
+        return in_array(
+            $this->role,
+            ['admin', 'director', 'general_engineer', 'project_manager'],
+            true,
+        );
     }
 
     /** Хэрэглэгч бүртгэх, үүрэг оноох эрх. */
@@ -99,7 +169,7 @@ class User extends Authenticatable
      */
     public function canEditPlan(): bool
     {
-        return in_array($this->role, ['admin', 'director', 'general_engineer', 'project_manager'], true);
+        return in_array($this->role, ['admin', 'general_engineer', 'project_manager'], true);
     }
 
     /**
@@ -110,12 +180,13 @@ class User extends Authenticatable
      */
     public function canManageReferenceData(): bool
     {
-        return in_array($this->role, ['admin', 'director', 'general_engineer'], true);
+        return in_array($this->role, ['admin', 'general_engineer'], true);
     }
 
     protected $fillable = [
         'name', 'email', 'password',
-        'role', 'scope_block_ids', 'contractor_id', 'is_active', 'is_demo',
+        'role', 'position', 'unit',
+        'scope_block_ids', 'contractor_id', 'is_active', 'is_demo',
     ];
 
     protected $hidden = ['password', 'remember_token'];

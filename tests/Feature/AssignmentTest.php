@@ -42,6 +42,18 @@ class AssignmentTest extends TestCase
 
         $this->seed(WorkTypeSeeder::class);
 
+        /*
+         * Энэ тест нь ГҮЙЦЭТГЭГЧ ОНООХ тухай — шалгалтын цэгийн тухай биш.
+         *
+         * Далд ажил батлагдаагүй бол дараагийн ажлын гүйцэтгэл бүртгэгдэхгүй
+         * (`HoldPointGate`). Энд гүйцэтгэл нь зөвхөн «хариуцагчийг солих
+         * боломжгүй» гэдгийг харуулах хэрэгсэл тул хоригийг унтраана —
+         * эс бөгөөс энэ тест шалгалтын цэгийн дүрэм өөрчлөгдөх бүрд унана.
+         *
+         * Хоригийг `HoldPointTest` шалгана.
+         */
+        WorkType::query()->update(['is_hold_point' => false]);
+
         $company = Company::create(['name' => 'Инэл ХХК']);
         /** @var Project $project */
         $project = $company->projects()->create(['name' => 'Цогцолбор', 'status' => 'active']);
@@ -94,6 +106,42 @@ class AssignmentTest extends TestCase
             WorkItem::where('block_id', $this->block->id)->whereNotNull('contractor_id')->count(),
         );
         $this->assertGreaterThan(0, WorkItem::where('block_id', $this->block->id)->count());
+    }
+
+    /**
+     * Хариуцагчгүй ажлын тоо САМБАР ба БЛОКИЙН нэгтгэлд ил гарна.
+     *
+     * Урьд нь энэ тоо зөвхөн оноох хуудсан дээр байв — тийш орсон хүн л
+     * мэддэг. Гэтэл оноохоо мартсан хүн яг тийш ордоггүй: туслан гүйцэтгэгч
+     * нэвтрээд «юу ч харагдахгүй байна» гэж залгах хүртэл мэдэгддэггүй.
+     */
+    public function test_unassigned_count_is_visible_on_the_dashboard_and_block_page(): void
+    {
+        $this->actingAs($this->manager, 'sanctum');
+
+        $total = WorkItem::where('block_id', $this->block->id)->count();
+
+        $dashboard = $this->getJson("/api/v1/projects/{$this->block->project_id}/dashboard")
+            ->assertOk()->json('data');
+        $summary = $this->getJson("/api/v1/blocks/{$this->block->id}/summary")
+            ->assertOk()->json('data.totals');
+
+        // Эхэндээ БҮГД хариуцагчгүй — загвар ингэж үүсгэдэг.
+        $this->assertSame($total, $dashboard['unassignedItems']);
+        $this->assertSame($total, $summary['unassignedItems']);
+
+        // Оноосны дараа тоо БУУРНА.
+        $assigned = $this->postJson("/api/v1/blocks/{$this->block->id}/work-items/assign", [
+            'workTypeGroupId' => $this->group->id,
+            'contractorId' => $this->goo->id,
+        ])->assertOk()->json('data.affected');
+
+        $this->assertGreaterThan(0, $assigned);
+        $this->assertSame(
+            $total - $assigned,
+            $this->getJson("/api/v1/blocks/{$this->block->id}/summary")
+                ->json('data.totals.unassignedItems')
+        );
     }
 
     public function test_assignment_summary_shows_what_is_left(): void

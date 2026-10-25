@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Inspection;
 use App\Models\Block;
 use App\Models\Company;
 use App\Models\Contractor;
@@ -77,6 +78,8 @@ class AcceptanceReportTest extends TestCase
 
         $wtg = WorkTypeGroup::firstOrCreate(['name' => $group], ['build_order' => 1]);
         $workType = WorkType::create([
+            // Каскад нь `TwoStageInspectionTest`-ийн ажил — энд нэг шат.
+            'inspection_stages' => 1,
             'work_type_group_id' => $wtg->id,
             'name' => "Ажил {$n}",
             'unit' => $unit,
@@ -95,7 +98,7 @@ class AcceptanceReportTest extends TestCase
     }
 
     /** Гүйцэтгэл мэдээлээд заасан огноогоор баталгаажуулна. */
-    private function accept(WorkItem $item, float $qty, string $date, string $stage = 'client'): void
+    private function accept(WorkItem $item, float $qty, string $date, string $stage = Inspection::STAGE_FINAL): void
     {
         $this->actingAs($this->engineer, 'sanctum')
             ->postJson("/api/v1/work-items/{$item->id}/progress", ['completedQty' => $qty])
@@ -169,7 +172,7 @@ class AcceptanceReportTest extends TestCase
             ->postJson("/api/v1/work-items/{$item->id}/progress", ['completedQty' => 80]);
         $this->actingAs($this->inspector, 'sanctum')
             ->postJson("/api/v1/work-items/{$item->id}/inspections", [
-                'stage' => 'client', 'result' => 'rejected', 'acceptedQty' => 0,
+                'stage' => Inspection::STAGE_FINAL, 'result' => 'rejected', 'acceptedQty' => 0,
                 'reason' => 'Чанар хангаагүй',
             ])->assertCreated();
 
@@ -180,10 +183,10 @@ class AcceptanceReportTest extends TestCase
     {
         // Ерөнхий гүйцэтгэгчийн дотоод хяналт нь захиалагчийн акт БИШ.
         $item = $this->workItem('м2', $this->goo);
-        $this->accept($item, 60, '2026-04-10', 'general_contractor');
+        $this->accept($item, 60, '2026-04-10', Inspection::STAGE_SITE);
 
         $this->assertSame(0, $this->report()['inspectionCount']);
-        $this->assertSame(1, $this->report(['stage' => 'general_contractor'])['inspectionCount']);
+        $this->assertSame(1, $this->report(['stage' => Inspection::STAGE_SITE])['inspectionCount']);
     }
 
     // -- Нэгж ------------------------------------------------------------
