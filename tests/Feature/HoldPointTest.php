@@ -4,13 +4,17 @@ namespace Tests\Feature;
 
 use App\Models\Block;
 use App\Models\Company;
+use App\Models\Contractor;
 use App\Models\Inspection;
 use App\Models\Location;
 use App\Models\User;
 use App\Models\WorkItem;
 use App\Models\WorkType;
 use App\Models\WorkTypeGroup;
+use App\Services\BlockLocationBuilder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -52,7 +56,7 @@ class HoldPointTest extends TestCase
             'floors' => 1, 'units_per_floor' => 2, 'start_date' => '2026-10-01',
         ]);
 
-        app(\App\Services\BlockLocationBuilder::class)->build($this->block, 1, 2);
+        app(BlockLocationBuilder::class)->build($this->block, 1, 2);
 
         // Цахилгаан (build_order 5) → Засал (build_order 7).
         $mep = WorkTypeGroup::create(['name' => 'цахилгаан', 'sequence_number' => 1, 'build_order' => 5]);
@@ -257,6 +261,91 @@ class HoldPointTest extends TestCase
             ->json('data.0');
 
         $this->assertArrayNotHasKey('holdPointReason', $row);
+    }
+
+    public function test_my_work_filters_before_pagination_and_explains_ancestor_blockers(): void
+    {
+        $hidden = $this->makeHidden(100);
+        $covering = $this->makeCovering();
+        $this->reporter->forceFill(['scope_block_ids' => [$this->block->id]])->save();
+        Sanctum::actingAs($this->reporter);
+        $url = "/api/v1/projects/{$this->block->project_id}/my-work";
+        $this->getJson($url.'?pageSize=1')->assertOk()
+            ->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.id', $hidden->id)
+            ->assertJsonPath('data.0.reportableQty', 100)->assertJsonPath('counts.blocked', 1);
+        $this->getJson($url.'?reportingState=blocked')->assertOk()
+            ->assertJsonPath('data.0.id', $covering->id)->assertJsonPath('data.0.reportableQty', 0)
+            ->assertJsonPath('data.0.blockingWorkItems.0.id', $hidden->id);
+        $this->fullyApprove($hidden, 100);
+        Sanctum::actingAs($this->reporter);
+        $this->getJson($url)->assertOk()->assertJsonPath('data.0.id', $covering->id)
+            ->assertJsonPath('counts.completed', 1)->assertJsonPath('counts.blocked', 0);
+    }
+
+    public function test_my_work_pending_missing_quantity_and_scope(): void
+    {
+        $hidden = $this->makeHidden(100);
+        $this->makeCovering()->update(['planned_qty' => 0]);
+        $this->reporter->forceFill(['scope_block_ids' => [$this->block->id]])->save();
+        Sanctum::actingAs($this->reporter);
+        $url = "/api/v1/projects/{$this->block->project_id}/my-work";
+        $this->postJson("/api/v1/work-items/{$hidden->id}/progress", ['completedQty' => 100])->assertCreated();
+        $this->getJson($url.'?reportingState=pending')->assertOk()->assertJsonPath('meta.total', 1)
+            ->assertJsonPath('data.0.reportingState', 'pending')->assertJsonPath('counts.blocked', 1);
+        $this->getJson($url.'?pageSize=201')->assertStatus(422);
+        $this->reporter->forceFill(['scope_block_ids' => [(string) Str::uuid()]])->save();
+        $this->getJson($url)->assertOk()->assertJsonPath('meta.total', 0)->assertJsonPath('counts.blocked', 0);
+    }
+
+    public function test_my_work_keeps_contractor_scope_but_sees_foreign_hold_points_without_links(): void
+    {
+        $own = Contractor::create(['name' => 'Өөрийн компани']);
+        $other = Contractor::create(['name' => 'Өөр компани']);
+        $hidden = $this->makeHidden(100);
+        $hidden->update(['contractor_id' => $other->id]);
+        $covering = $this->makeCovering();
+        $covering->update(['contractor_id' => $own->id]);
+        $rep = User::factory()->create(['role' => 'contractor', 'contractor_id' => $own->id]);
+        Sanctum::actingAs($rep);
+        $url = "/api/v1/projects/{$this->block->project_id}/my-work";
+        $this->getJson($url.'?reportingState=blocked&contractorId='.$other->id)->assertOk()->assertJsonPath('meta.total', 0);
+        $response = $this->getJson($url.'?reportingState=blocked')->assertOk()
+            ->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.id', $covering->id)
+            ->assertJsonPath('data.0.blockingWorkItems', [])->assertJsonPath('counts.ready', 0);
+        $this->assertStringContainsString($hidden->name, $response->json('data.0.reportingReason'));
+    }
+
+    public function test_my_work_location_filter_and_query_count_are_bounded(): void
+    {
+        $this->makeHidden(100);
+        $covering = $this->makeCovering();
+        $this->reporter->forceFill(['scope_block_ids' => [$this->block->id]])->save();
+        Sanctum::actingAs($this->reporter);
+        $url = "/api/v1/projects/{$this->block->project_id}/my-work";
+        DB::enableQueryLog();
+        $this->getJson($url.'?reportingState=blocked&blockId='.$this->block->id.'&locationId='.$covering->location_id)
+            ->assertOk()->assertJsonPath('meta.total', 1)->assertJsonPath('counts.ready', 0);
+        $this->assertLessThan(20, count(DB::getQueryLog()));
+        DB::disableQueryLog();
+        $this->getJson($url.'?blockId='.(string) Str::uuid())->assertOk()->assertJsonPath('meta.total', 0);
+    }
+
+    public function test_reporting_query_correlates_outer_columns_in_where_for_mysql(): void
+    {
+        $query = app(\App\Services\ReportableWork::class)->filter(WorkItem::query(), 'ready');
+        $sql = $query->toSql();
+        // SQLite accepts correlation in JOIN ON, but MySQL raises error 1054.
+        $this->assertStringContainsString('cross join "locations" as "target_location"', $sql);
+        $this->assertStringContainsString('"target_location"."id" = "work_items"."location_id"', $sql);
+        $this->assertStringContainsString('"target_type"."id" = "work_items"."work_type_id"', $sql);
+        $subquery = collect($query->getQuery()->wheres)->firstWhere('type', 'NotExists')['query'];
+        foreach ($subquery->joins as $join) {
+            foreach ($join->wheres as $condition) {
+                foreach (['first', 'second'] as $column) {
+                    $this->assertStringNotContainsString('work_items.', $condition[$column] ?? '');
+                }
+            }
+        }
     }
 
     // -----------------------------------------------------------------

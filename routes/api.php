@@ -86,6 +86,8 @@ Route::prefix('v1')->group(function () {
         Route::get('projects/{project}/queue', [QueueController::class, 'index']);
         Route::get('projects/{project}/queue/counts', [QueueController::class, 'counts']);
 
+        Route::get('projects/{project}/my-work', [\App\Http\Controllers\Api\MyWorkController::class, 'index']);
+
         // --- Тайлан ---
         Route::get('projects/{project}/reports/acceptance', [ReportController::class, 'acceptance']);
         Route::get('projects/{project}/reports/acceptance.xlsx', [ReportController::class, 'acceptanceXlsx']);
