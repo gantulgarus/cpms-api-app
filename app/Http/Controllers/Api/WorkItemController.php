@@ -13,6 +13,7 @@ use App\Models\Block;
 use App\Models\ProgressEntry;
 use App\Models\WorkItem;
 use App\Services\BlockSummaryService;
+use App\Services\SiteEngineerAssignments;
 use App\Services\WorkItemFilter;
 use App\Services\WorkScope;
 use Illuminate\Http\JsonResponse;
@@ -71,7 +72,7 @@ class WorkItemController extends Controller
     }
 
     /** GET /work-items/{workItem} */
-    public function show(WorkItem $workItem): JsonResponse
+    public function show(Request $request, WorkItem $workItem): JsonResponse
     {
         $workItem->load(['location', 'workType.group', 'contractor', 'inspector']);
 
@@ -83,6 +84,11 @@ class WorkItemController extends Controller
          * хэрэгтэй.
          */
         $workItem->setAttribute('with_hold_point', true);
+        $assignments = app(SiteEngineerAssignments::class);
+        $engineer = $assignments->engineer($workItem);
+        $workItem->setAttribute('site_engineer_info', $engineer ? ['id' => $engineer->id, 'name' => $engineer->name, 'position' => $engineer->position] : null);
+        $workItem->setAttribute('with_site_engineer', true);
+        $workItem->setAttribute('can_check_this_work_item', $assignments->canCheck($request->user(), $workItem));
         // Татгалзсан нийт хэмжээ = дахин хийсэн ажлын хэмжээ. Тусдаа мөр
         // үүсгэхгүйгээр дахин хийлтийн зардлыг ингэж хэмжинэ.
         $workItem->loadSum('inspections', 'rejected_qty');

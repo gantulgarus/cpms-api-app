@@ -5,6 +5,7 @@ namespace App\Http\Requests;
 use App\Models\ChecklistItem;
 use App\Models\Inspection;
 use App\Services\ChecklistGate;
+use App\Services\SiteEngineerAssignments;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -52,6 +53,11 @@ class StoreInspectionRequest extends FormRequest
         }
 
         $workItem = $this->route('workItem');
+        if ($stage === Inspection::STAGE_SITE && ! app(SiteEngineerAssignments::class)->canCheck($user, $workItem)) {
+            $this->denial = 'Энэ ажил танд шалгахаар хуваарилагдаагүй байна. Ерөнхий инженер эсвэл төслийн менежерт хандана уу.';
+
+            return false;
+        }
 
         // Хянагдаагүй явцын дундаас өөрийнх нь мэдээлсэн бичлэг байвал хориглоно.
         $ownReport = $workItem->progressEntries()

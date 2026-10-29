@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\WorkItemCollection;
 use App\Models\Project;
 use App\Models\WorkItem;
+use App\Services\SiteEngineerAssignments;
 use App\Services\WorkScope;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -52,6 +53,7 @@ class QueueController extends Controller
             ->with(['location', 'workType.group', 'contractor', 'block']);
 
         $this->scope->workItems($query, $request->user());
+        app(SiteEngineerAssignments::class)->scope($query, $request->user());
 
         if ($blockId = $request->query('blockId')) {
             $query->where('block_id', $blockId);
@@ -96,6 +98,7 @@ class QueueController extends Controller
             ->where('b.project_id', $project->id);
 
         $this->scope->rawWorkItems($query, $request->user());
+        app(SiteEngineerAssignments::class)->scope($query, $request->user(), 'wi');
 
         // Тоонууд нь жагсаалттай ИЖИЛ шүүлтүүрийг дагана — эс бөгөөс
         // таб дээр «12» гэж бичигдээд жагсаалтад 3 мөр гарна.

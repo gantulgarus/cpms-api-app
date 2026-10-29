@@ -74,6 +74,8 @@ class WorkItemResource extends JsonResource
                 (bool) $this->resource->getAttribute('with_hold_point'),
                 fn () => app(HoldPointGate::class)->reason($this->resource),
             ),
+            'siteEngineer' => $this->when((bool) $this->resource->getAttribute('with_site_engineer'), fn () => $this->resource->getAttribute('site_engineer_info')),
+            'canCheckThisWorkItem' => $this->when((bool) $this->resource->getAttribute('with_site_engineer'), fn () => (bool) $this->resource->getAttribute('can_check_this_work_item')),
             'stagePool' => $this->nextStage() ? $this->stagePool($this->nextStage()) : 0.0,
             /*
              * ҮНДСЭН төлөвлөгөө — сунгалтаар ХӨДӨЛДӨГГҮЙ.

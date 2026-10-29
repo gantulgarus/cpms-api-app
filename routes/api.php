@@ -8,15 +8,17 @@ use App\Http\Controllers\Api\BudgetImportController;
 use App\Http\Controllers\Api\ChecklistController;
 use App\Http\Controllers\Api\ConcreteOrderController;
 use App\Http\Controllers\Api\ContractorController;
-use App\Http\Controllers\Api\MaterialBudgetController;
-use App\Http\Controllers\Api\MaterialOrderController;
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\ExtensionRequestController;
 use App\Http\Controllers\Api\IssueController;
-use App\Http\Controllers\Api\QueueController;
-use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\MaterialBudgetController;
+use App\Http\Controllers\Api\MaterialOrderController;
+use App\Http\Controllers\Api\MyWorkController;
 use App\Http\Controllers\Api\PhotoController;
 use App\Http\Controllers\Api\ProjectController;
+use App\Http\Controllers\Api\QueueController;
+use App\Http\Controllers\Api\ReportController;
+use App\Http\Controllers\Api\SiteEngineerAssignmentController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\WorkItemAssignmentController;
 use App\Http\Controllers\Api\WorkItemController;
@@ -86,7 +88,7 @@ Route::prefix('v1')->group(function () {
         Route::get('projects/{project}/queue', [QueueController::class, 'index']);
         Route::get('projects/{project}/queue/counts', [QueueController::class, 'counts']);
 
-        Route::get('projects/{project}/my-work', [\App\Http\Controllers\Api\MyWorkController::class, 'index']);
+        Route::get('projects/{project}/my-work', [MyWorkController::class, 'index']);
 
         // --- Тайлан ---
         Route::get('projects/{project}/reports/acceptance', [ReportController::class, 'acceptance']);
@@ -129,6 +131,8 @@ Route::prefix('v1')->group(function () {
             Route::post('blocks/{block}/work-items/set-quantity', [WorkItemPlanController::class, 'setQuantity']);
 
             // --- Хариуцагч оноох ---
+            Route::get('blocks/{block}/site-engineer-assignments', [SiteEngineerAssignmentController::class, 'index']);
+            Route::post('blocks/{block}/site-engineer-assignments', [SiteEngineerAssignmentController::class, 'store']);
             Route::get('blocks/{block}/assignments', [WorkItemAssignmentController::class, 'summary']);
             Route::post('blocks/{block}/work-items/assign', [WorkItemAssignmentController::class, 'assign']);
 

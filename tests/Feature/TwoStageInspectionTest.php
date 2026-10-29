@@ -5,11 +5,15 @@ namespace Tests\Feature;
 use App\Models\Company;
 use App\Models\Inspection;
 use App\Models\Location;
+use App\Models\Project;
 use App\Models\User;
 use App\Models\WorkItem;
 use App\Models\WorkType;
 use App\Models\WorkTypeGroup;
+use App\Services\AcceptanceReport;
+use App\Services\BlockLocationBuilder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
@@ -47,7 +51,7 @@ class TwoStageInspectionTest extends TestCase
             'floors' => 1, 'units_per_floor' => 1, 'start_date' => '2026-10-01',
         ]);
 
-        app(\App\Services\BlockLocationBuilder::class)->build($block, 1, 1);
+        app(BlockLocationBuilder::class)->build($block, 1, 1);
 
         $group = WorkTypeGroup::create(['name' => 'Угсралт', 'sequence_number' => 1, 'build_order' => 1]);
         $type = WorkType::create([
@@ -64,8 +68,14 @@ class TwoStageInspectionTest extends TestCase
         ]);
 
         $this->reporter = User::factory()->create(['role' => 'site_engineer']);
-        $this->siteEngineer = User::factory()->create(['role' => 'site_engineer']);
+        $this->siteEngineer = User::factory()->create(['role' => 'site_engineer'])->refresh();
         $this->inspector = User::factory()->create(['role' => 'inspector']);
+        foreach ([$group->id] as $groupId) {
+            DB::table('block_site_engineer_assignments')->insert([
+                'block_id' => $block->id, 'work_type_group_id' => $groupId,
+                'site_engineer_id' => $this->siteEngineer->id, 'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
     }
 
     /**
@@ -234,8 +244,8 @@ class TwoStageInspectionTest extends TestCase
         $this->report(40);
         $this->inspect($this->siteEngineer, Inspection::STAGE_SITE, 40)->assertCreated();
 
-        $project = \App\Models\Project::firstOrFail();
-        $report = app(\App\Services\AcceptanceReport::class);
+        $project = Project::firstOrFail();
+        $report = app(AcceptanceReport::class);
 
         $before = $report->build(
             $project, $this->inspector, null,

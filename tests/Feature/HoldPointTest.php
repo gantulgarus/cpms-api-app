@@ -12,6 +12,7 @@ use App\Models\WorkItem;
 use App\Models\WorkType;
 use App\Models\WorkTypeGroup;
 use App\Services\BlockLocationBuilder;
+use App\Services\ReportableWork;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -72,8 +73,14 @@ class HoldPointTest extends TestCase
         ]);
 
         $this->reporter = User::factory()->create(['role' => 'site_engineer']);
-        $this->siteEngineer = User::factory()->create(['role' => 'site_engineer']);
+        $this->siteEngineer = User::factory()->create(['role' => 'site_engineer'])->refresh();
         $this->inspector = User::factory()->create(['role' => 'inspector']);
+        foreach ([$mep->id, $finish->id] as $groupId) {
+            DB::table('block_site_engineer_assignments')->insert([
+                'block_id' => $this->block->id, 'work_type_group_id' => $groupId,
+                'site_engineer_id' => $this->siteEngineer->id, 'created_at' => now(), 'updated_at' => now(),
+            ]);
+        }
     }
 
     /**
@@ -332,7 +339,7 @@ class HoldPointTest extends TestCase
 
     public function test_reporting_query_correlates_outer_columns_in_where_for_mysql(): void
     {
-        $query = app(\App\Services\ReportableWork::class)->filter(WorkItem::query(), 'ready');
+        $query = app(ReportableWork::class)->filter(WorkItem::query(), 'ready');
         $sql = $query->toSql();
         // SQLite accepts correlation in JOIN ON, but MySQL raises error 1054.
         $this->assertStringContainsString('cross join "locations" as "target_location"', $sql);
