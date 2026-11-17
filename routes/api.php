@@ -137,6 +137,7 @@ Route::prefix('v1')->group(function () {
 
             // --- Хариуцагч оноох ---
             Route::get('blocks/{block}/site-engineer-assignments', [SiteEngineerAssignmentController::class, 'index']);
+            Route::post('blocks/{block}/inspector-subgroup-assignments', [SiteEngineerAssignmentController::class, 'storeInspector']);
             Route::post('blocks/{block}/site-engineer-assignments', [SiteEngineerAssignmentController::class, 'store']);
             Route::get('blocks/{block}/assignments', [WorkItemAssignmentController::class, 'summary']);
             Route::post('blocks/{block}/work-items/assign', [WorkItemAssignmentController::class, 'assign']);

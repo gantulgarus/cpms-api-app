@@ -79,6 +79,54 @@ class SiteEngineerAssignmentTest extends TestCase
         return $this->postJson("/api/v1/work-items/{$item->id}/inspections", ['stage' => Inspection::STAGE_SITE, 'result' => 'accepted', 'acceptedQty' => 10]);
     }
 
+    public function test_subgroups_have_independent_engineers_and_override_group_fallback(): void
+    {
+        $typeA = $this->first->workType;
+        $typeB = WorkType::create(['name' => 'Өөр дэд бүлгийн ажил', 'work_type_group_id' => $typeA->work_type_group_id, 'unit' => 'м2', 'level' => 'floor']);
+        $other = $this->makeWork('Өөр дэд бүлгийн ажил', $typeB);
+        foreach ([[$typeA, '1.1'], [$typeB, '1.2']] as [$type, $number]) {
+            $entry = \App\Models\WorkCatalogEntry::create(['group_name' => 'Өрлөг', 'subgroup_number' => $number, 'type_name' => 'Төрөл '.$number,
+                'name' => $type->name, 'unit' => 'м2', 'sequence_number' => 1]);
+            $entry->work_type_id = $type->id;
+            $entry->save();
+        }
+        $this->assign($this->first, $this->engineerA)->assertOk();
+        $url = "/api/v1/blocks/{$this->block->id}/site-engineer-assignments";
+        $payload = ['workTypeGroupId' => $typeA->work_type_group_id, 'subgroupNumber' => '1.2', 'siteEngineerId' => $this->engineerB->id];
+        $this->postJson($url, $payload)->assertOk();
+        $rows = collect($this->getJson($url)->assertOk()->json('data.groups'));
+        $this->assertSame($this->engineerA->id, $rows->firstWhere('subgroupNumber', '1.1')['siteEngineer']['id']);
+        $this->assertSame($this->engineerB->id, $rows->firstWhere('subgroupNumber', '1.2')['siteEngineer']['id']);
+        $inspector = User::factory()->create(['role' => 'inspector']);
+        $bulkUrl = "/api/v1/blocks/{$this->block->id}/inspector-subgroup-assignments";
+        $bulk = ['workTypeGroupId' => $typeA->work_type_group_id, 'subgroupNumber' => '1.2', 'inspectorId' => $inspector->id];
+        $this->postJson($bulkUrl, array_merge($bulk, ['inspectorId' => $this->engineerA->id]))->assertUnprocessable();
+        $this->postJson($bulkUrl, $bulk)->assertOk()->assertJsonPath('data.updated', 1);
+        $this->assertSame($inspector->id, $other->fresh()->inspector_id);
+        $this->assertNull($this->first->fresh()->inspector_id);
+        $this->assertNull($this->second->fresh()->inspector_id);
+        Sanctum::actingAs($this->engineerA);
+        $this->postJson($bulkUrl, $bulk)->assertForbidden();
+        Sanctum::actingAs($this->manager);
+        $filtered = $this->getJson("/api/v1/blocks/{$this->block->id}/work-items?subgroupNumber=1.2")->assertOk();
+        $filtered->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.id', $other->id);
+        Sanctum::actingAs($this->engineerA);
+        $this->getJson($this->queue().'?type=check')->assertJsonPath('meta.total', 1)->assertJsonPath('data.0.id', $this->first->id);
+        $this->check($other)->assertForbidden();
+        Sanctum::actingAs($this->engineerB);
+        $this->getJson("/api/v1/work-items/{$other->id}")->assertOk()->assertJsonPath('data.siteEngineer.id', $this->engineerB->id)->assertJsonPath('data.canCheckThisWorkItem', true);
+        $new = $this->makeWork('Дараа нэмсэн', $typeB);
+        $this->getJson($this->queue().'?type=check')->assertJsonPath('meta.total', 2);
+        Sanctum::actingAs($this->manager);
+        $payload['siteEngineerId'] = null;
+        $this->postJson($url, $payload)->assertOk();
+        $this->assertNull(app(\App\Services\SiteEngineerAssignments::class)->engineer($new));
+        Sanctum::actingAs($this->engineerA);
+        $this->check($other)->assertForbidden();
+        Sanctum::actingAs($this->engineerB);
+        $this->getJson($this->queue().'?type=check')->assertJsonPath('meta.total', 0);
+    }
+
     public function test_each_engineer_only_gets_their_queue_and_cannot_check_another_group(): void
     {
         $this->assign($this->first, $this->engineerA)->assertOk();

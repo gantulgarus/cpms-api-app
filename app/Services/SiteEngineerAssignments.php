@@ -16,13 +16,25 @@ class SiteEngineerAssignments
         if ($user->role !== 'site_engineer') {
             return;
         }
-        $query->whereExists(fn ($q) => $q->selectRaw('1')
+        $query->where(function ($query) use ($user, $alias) {
+            $query->whereExists(fn ($q) => $q->selectRaw('1')
             ->from('block_site_engineer_assignments as sea')
             ->join('work_types as sea_type', 'sea_type.work_type_group_id', '=', 'sea.work_type_group_id')
             // Correlation belongs in WHERE, not JOIN ON (MySQL).
             ->whereColumn('sea.block_id', "{$alias}.block_id")
             ->whereColumn('sea_type.id', "{$alias}.work_type_id")
+            ->leftJoin('work_catalog_entries as sea_catalog', function ($join) { $join->on('sea_catalog.work_type_id', '=', 'sea_type.id')->whereNull('sea_catalog.deleted_at'); })
+            ->whereNotExists(fn ($override) => $override->selectRaw('1')->from('block_subgroup_engineer_assignments as sea_override')
+                ->whereColumn('sea_override.block_id', 'sea.block_id')->whereColumn('sea_override.work_type_group_id', 'sea.work_type_group_id')
+                ->whereRaw("sea_override.subgroup_number = COALESCE(sea_catalog.subgroup_number, '')"))
             ->where('sea.site_engineer_id', $user->id));
+            $query->orWhereExists(fn ($q) => $q->selectRaw('1')->from('block_subgroup_engineer_assignments as sub')
+                ->join('work_types as sub_type', 'sub_type.work_type_group_id', '=', 'sub.work_type_group_id')
+                ->leftJoin('work_catalog_entries as sub_catalog', function ($join) { $join->on('sub_catalog.work_type_id', '=', 'sub_type.id')->whereNull('sub_catalog.deleted_at'); })
+                ->whereColumn('sub.block_id', "{$alias}.block_id")->whereColumn('sub_type.id', "{$alias}.work_type_id")
+                ->whereRaw("sub.subgroup_number = COALESCE(sub_catalog.subgroup_number, '')")
+                ->where('sub.site_engineer_id', $user->id));
+        });
     }
 
     public function engineer(WorkItem $item): ?User
@@ -31,6 +43,9 @@ class SiteEngineerAssignments
         if (! $groupId) {
             return null;
         }
+        $override = DB::table('block_subgroup_engineer_assignments')->where('block_id', $item->block_id)
+            ->where('work_type_group_id', $groupId)->where('subgroup_number', $item->workType?->catalogEntry?->subgroup_number ?? '')->first();
+        if ($override) return $override->site_engineer_id ? User::find($override->site_engineer_id) : null;
         $id = DB::table('block_site_engineer_assignments')
             ->where('block_id', $item->block_id)->where('work_type_group_id', $groupId)->value('site_engineer_id');
 

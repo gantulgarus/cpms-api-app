@@ -28,6 +28,14 @@ class WorkItemFilter
             $this->byLocation($query, $locationId, $request->boolean('includeDescendants'));
         }
 
+        if ($request->has('subgroupNumber')) {
+            $subgroup = $request->query('subgroupNumber');
+            $query->whereHas('workType', function ($q) use ($subgroup) {
+                if ($subgroup === '__none__') $q->whereDoesntHave('catalogEntry');
+                else $q->whereHas('catalogEntry', fn ($c) => $c->where('subgroup_number', $subgroup));
+            });
+        }
+
         $query
             ->when($request->query('workTypeId'), fn ($q, $v) => $q->where('work_type_id', $v))
             ->when($request->query('status'), fn ($q, $v) => $q->where('status', $v))
