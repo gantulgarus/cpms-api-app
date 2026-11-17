@@ -21,7 +21,7 @@ class RetireLegacyWorkReference extends Command
             $this->error('Барилга эсвэл ажлын мөр байна. Хуучин лавлахыг устгаагүй.');
             return self::FAILURE;
         }
-        if (WorkCatalogEntry::count() < 293) {
+        if (WorkCatalogEntry::withTrashed()->where('source_key', 'like', 'sequence-20261116:%')->count() < 293) {
             $this->error('Шинэ лавлах бүрэн ороогүй. Устгаагүй.');
             return self::FAILURE;
         }
