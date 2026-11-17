@@ -175,7 +175,7 @@ class WorkItemPlanController extends Controller
 
         abort_if($ids === [], 422, 'Ажлын төрөл сонгоно уу.');
 
-        $workTypes = WorkType::whereIn('id', $ids)->with('group')->get();
+        $workTypes = WorkType::whereIn('id', $ids)->with(['group', 'catalogEntry'])->get();
         $created = 0;
         $skipped = [];
 
@@ -193,7 +193,13 @@ class WorkItemPlanController extends Controller
                         fn ($q) => $q->where('level', $workType->level),
                     )
                     ->orderBy('sequence_number')
+                    ->with('parent')
                     ->get();
+
+                if ($workType->catalogEntry) {
+                    $targets = $targets->filter(fn ($location) => $location->level === $workType->level
+                        && app(\App\Services\CatalogFloorScope::class)->matches($workType->catalogEntry, $location));
+                }
 
                 if ($targets->isEmpty()) {
                     $skipped[] = ['name' => $workType->name, 'reason' => self::NO_LOCATION];

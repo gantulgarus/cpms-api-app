@@ -32,6 +32,11 @@ class WorkType extends Model
         return $this->belongsTo(WorkTypeGroup::class, 'work_type_group_id');
     }
 
+    public function catalogEntry(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(WorkCatalogEntry::class);
+    }
+
     /** Энэ төрлөөр үүссэн ажлууд — устгах/засах боломжтой эсэхийг шийднэ. */
     public function workItems(): HasMany
     {

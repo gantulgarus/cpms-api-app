@@ -7,7 +7,6 @@ use App\Models\Block;
 use App\Models\BudgetImport;
 use App\Services\BudgetTemplateSheet;
 use App\Services\Import\BudgetImportRunner;
-use App\Services\Import\WorkBudgetWriter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -232,16 +231,8 @@ class BudgetImportController extends Controller
             'types' => ['nullable', 'array'],
             'types.*' => [Rule::in(BudgetImportRunner::TYPES)],
 
-            /*
-             * ГОРИМ — ажлын төсвийн хамгийн чухал сонголт.
-             *
-             *   replace — бүгдийг солино, ГҮЙЦЭТГЭЛ УСТАНА
-             *   update  — тоо хэмжээ, үнэ, инженер солигдоно, явц ҮЛДЭНЭ
-             *
-             * Анхдагч нь `replace`: хуучин зан төлөв хэвээр, дуудагч
-             * зориудаар сонгож байж л өөр болно.
-             */
-            'mode' => ['nullable', Rule::in(WorkBudgetWriter::MODES)],
+            // Work budget imports only change unit prices.
+            'mode' => ['nullable', Rule::in(['prices'])],
         ]);
 
         $types = array_values(array_intersect(
@@ -260,7 +251,7 @@ class BudgetImportController extends Controller
                 apply: true,
                 prune: (bool) ($validated['prune'] ?? false),
                 types: $types,
-                mode: $validated['mode'] ?? WorkBudgetWriter::MODE_REPLACE,
+                mode: 'prices',
             );
         } catch (Throwable $e) {
             return response()->json(['message' => $e->getMessage()], 422);
@@ -310,7 +301,7 @@ class BudgetImportController extends Controller
         bool $apply,
         bool $prune = false,
         ?array $types = null,
-        string $mode = WorkBudgetWriter::MODE_REPLACE,
+        string $mode = 'prices',
     ): array {
         $path = Storage::disk('local')->path($import->path);
 

@@ -65,7 +65,6 @@ class BudgetTemplateSheet
         $w = new XlsxWriter(WorkBudgetImport::SHEET);
 
         $this->workSheet($w, $block, $floors);
-        $this->materialSheet($w, $block, $floors);
         $this->notesSheet($w, $block, $floors);
 
         return $w->save($path);
@@ -101,105 +100,27 @@ class BudgetTemplateSheet
     /** @param  array<int, string>  $floors */
     private function workSheet(XlsxWriter $w, Block $block, array $floors): void
     {
-        $shown = array_slice($floors, 0, $this->workFloorLimit());
-        $first = self::WORK_FIRST_FLOOR;
-        $afterFloors = $first + count($shown);
-        $total = self::WORK_TOTAL;
-        $price = self::WORK_UNIT_PRICE;
-
-        $widths = array_fill(0, $price + 1, 13.0);
-        $widths[0] = 5;
-        $widths[2] = 12;
-        $widths[3] = 14;
-        $widths[4] = 28;
-        $widths[5] = 28;
-        $widths[6] = 18;
-        $widths[7] = 14;
-        $widths[8] = 9;
-        $widths[$total] = 14;
-        $widths[$price] = 16;
-        $w->widths($widths);
-
-        // --- 1-р мөр: гарчиг ---
-        $row = array_fill(0, $price + 1, '');
-        $row[0] = [$block->name.' — АЖЛЫН ХӨЛСНИЙ ТӨСӨВ', XlsxWriter::TITLE];
-        $w->row($row);
-
-        // --- 2-р мөр: үндсэн толгой ---
-        $row = array_fill(0, $price + 1, '');
-
-        foreach (self::WORK_COLUMNS as $column => $label) {
-            $row[$column] = [$label, XlsxWriter::HEADER];
-        }
-
-        $row[$first] = ['Ажлын тоо хэмжээ', XlsxWriter::HEADER];
-
-        /*
-         * Давхрын муж нь ҮРГЭЛЖ J..AB — «Нийт» ба «Нэгж үнэ» нь AC, AD
-         * дээр ХАТУУ зогсдог тул блокийн давхар цөөн байвал дунд нь
-         * ашиглагдаагүй нүх үлдэнэ. Нүхийг тайлбаргүй орхивол хүн
-         * «алдаа гарсан юм байна» гэж бодно.
-         */
-        if ($afterFloors <= self::WORK_LAST_FLOOR) {
-            $row[$afterFloors] = ['Нөөц багана — хоосон үлдээнэ', XlsxWriter::HEADER];
-        }
-
-        $row[$total] = ['Нийт', XlsxWriter::HEADER];
-        $row[$price] = ['Нэгж үнэ', XlsxWriter::HEADER];
-        $w->row($row);
-
-        /*
-         * --- 3-р мөр: давхрын нэрс ---
-         *
-         * Задлагч ЗӨВХӨН энэ мөрнөөс давхар хайна (`HEADER_ROW = 3`).
-         * Нэр нь блокоос шууд авагдсан тул тулгалт гарцаагүй таарна.
-         *
-         * Ашиглагдаагүй нөөц баганыг энд ХООСОН үлдээнэ: ямар нэг
-         * текст бичвэл задлагч «блокт байхгүй давхар» гэж бүртгэнэ.
-         */
-        $row = array_fill(0, $price + 1, '');
-
-        foreach ($shown as $i => $name) {
-            $row[$first + $i] = [$name, XlsxWriter::HEADER];
-        }
-
-        $w->row($row);
-
-        $this->mergeHeader($w, [
-            ...array_keys(self::WORK_COLUMNS),
-            $total,
-            $price,
-        ], $first, count($shown), $afterFloors, self::WORK_LAST_FLOOR);
-
-        // --- 4-р мөрөөс: жишээ ---
-        $examples = [
-            ['1.2', 'Угсралтын ажил', 'Хэв хашмал угсрах', 'м2', 420, 18500],
-            ['2.6.1', 'Угсралтын ажил', 'Арматур холбох', 'тн', 12.5, 950000],
-            ['17.1.6', 'Дотор засал', 'Плитаны ажил', 'м2', 96, 23000],
-        ];
-
-        foreach ($examples as $i => [$code, $name, $part, $unit, $qty, $unitPrice]) {
-            $row = array_fill(0, $price + 1, '');
-
-            $row[0] = $i + 1;
-            $row[2] = [self::EXAMPLE_PREFIX.'-'.$code, XlsxWriter::CELL];
-            $row[4] = [$name, XlsxWriter::CELL];
-            $row[5] = [$part, XlsxWriter::CELL];
-            $row[6] = ['', XlsxWriter::CELL];
-            $row[8] = [$unit, XlsxWriter::CELL];
-
-            // Тоо хэмжээг давхар бүрт — энэ нь файлын гол санаа.
-            foreach ($shown as $j => $unused) {
-                $row[$first + $j] = [$qty, XlsxWriter::NUMBER];
-            }
-
-            $row[$total] = [$qty * count($shown), XlsxWriter::NUMBER];
-            $row[$price] = [$unitPrice, XlsxWriter::MONEY];
-
+        $w->widths([6, 8, 18, 12, 28, 48, 12, 12, 12, ...array_fill(0, 19, 10), 16, 18]);
+        $w->row([[$block->name.' — АЖЛЫН ХӨЛСНИЙ ҮНЭ', XlsxWriter::TITLE]]);
+        $header = array_fill(0, 30, '');
+        foreach ([0 => '№', 2 => 'Ажлын код', 4 => 'Бүлэг', 5 => 'Хийгдэх ажлын нэр', 8 => 'Хэмжих нэгж', 28 => 'Одоогийн тоо хэмжээ', 29 => 'Нэгж үнэ'] as $column => $label) $header[$column] = [$label, XlsxWriter::HEADER];
+        $w->row($header);
+        $w->row(['Зөвхөн нэгж үнийг бөглөнө. Код, нэгжийг хадгална. Тоо хэмжээг импортоор өөрчлөхгүй.']);
+        $groups = $block->workItems()->with('workType.catalogEntry')->get()->groupBy('work_type_id');
+        $i = 0;
+        foreach ($groups as $items) {
+            $type = $items->first()->workType;
+            $row = array_fill(0, 30, '');
+            $row[0] = ++$i;
+            $row[2] = \App\Services\Import\WorkPriceImport::codeFor($type);
+            $row[4] = $type->catalogEntry?->group_name ?? $type->group?->name;
+            $row[5] = $type->name;
+            $row[8] = $type->unit;
+            $row[28] = [$items->sum('planned_qty'), XlsxWriter::NUMBER];
+            $prices = $items->pluck('budget_unit_price')->unique();
+            $row[29] = [$prices->count() === 1 ? $prices->first() : null, XlsxWriter::MONEY];
             $w->row($row);
         }
-
-        $this->exampleWarning($w, $price);
     }
 
     /**
@@ -387,117 +308,14 @@ class BudgetTemplateSheet
     private function notesSheet(XlsxWriter $w, Block $block, array $floors): void
     {
         $w->sheet('Тайлбар');
-        $w->widths([42, 78]);
-
-        $w->row([['ТӨСӨВ ОРУУЛАХ ЗААВАР', XlsxWriter::TITLE]]);
-        $w->mergeLastRow(0, 1);
-        $w->row([['Блок: '.$block->name.' · давхар: '.count($floors), XlsxWriter::SUBTITLE]]);
-        $w->row();
-
-        $limit = $this->workFloorLimit();
-
-        /** @var array<int, array{0: string, 1: array<int, array{0: string, 1: string}>}> $sections */
-        $sections = [
-            ['Хамгийн чухал гурван зүйл', [
-                ['Хуудасны нэрийг битгий өөрчил',
-                    '«'.WorkBudgetImport::SHEET.'», «'.MaterialBudgetImport::SHEET
-                    .'» — систем яг энэ нэрээр хайна. Өөрчилбөл тэр хуудас огт уншигдахгүй.'],
-                ['Давхрын баганыг битгий өөрчил',
-                    'Багануудын толгой нь энэ блокийн давхруудын нэрээр аль хэдийн бичигдсэн. '
-                    .'Нэрийг нь засвал тэр давхрын тоо хэмжээ «блокт байхгүй байршил» гэж татгалзагдана.'],
-                ['Жишээ мөрүүдийг устга',
-                    'Код нь «'.self::EXAMPLE_PREFIX.'-» угтвартай тул систем татгалзана — '
-                    .'гэхдээ алдааны жагсаалтыг цэвэр байлгахын тулд устгасан нь дээр.'],
-            ]],
-
-            ['Ажлын хөлсний төсөв — БАГАНЫН БАЙРЛАЛ ХАТУУ', [
-                ['Багана нэмж, хасаж болохгүй',
-                    'Энэ хуудсыг систем баганын НЭРЭЭР биш ДУГААРААР уншина. Дунд нь нэг багана '
-                    .'нэмбэл бүх зүйл гулсаж, бараг бүх мөр татгалзана.'],
-                ['Дээр нь мөр нэмж болохгүй',
-                    'Толгой нь 2 ба 3-р мөр, өгөгдөл 4-р мөрнөөс эхэлнэ. Гарчиг, огноо нэмбэл гулсана.'],
-                ['«Код» (C багана) заавал',
-                    'Систем ажлыг НЭРЭЭР биш КОДООР холбоно: төсөвт «Блокон хана», лавлахад '
-                    .'«блокон өрлөг» гэж бичигдсэн байдаг тул нэрээр тааруулах боломжгүй. '
-                    .'Ямар код байгааг системийн «Лавлах сан» цэснээс хараарай — «Төсвийн код» '
-                    .'багана бий. Код нь тэндхийн аль нэгтэй таарахгүй бол тэр мөр орохгүй.'],
-                ['Нэг код хэд хуваагдаж болно',
-                    '«17.1.6 Плитаны ажил» нь таван ажилд задардаг. Тэр үед F баганын «Ажлын '
-                    .'бүрдэл» («Айлын тагт», «Нийтийн эдэлбэр»…) нь лавлах дахь «Бүрдэл»-тэй '
-                    .'таарах ёстой. Систем эхлээд «код + бүрдэл»-ээр, олдохгүй бол зөвхөн '
-                    .'кодоор хайна.'],
-                ['Давхрын багана дээд тал нь '.$limit,
-                    count($floors) > $limit
-                        ? 'АНХААР: энэ блокт '.count($floors).' давхар байна. Эхний '.$limit
-                          .' нь л загварт багтсан — үлдсэнийг нь гараар нэмэх шаардлагатай.'
-                        : 'Энэ блокийн '.count($floors).' давхар бүгд багтсан.'],
-                ['«Нөөц багана» гэдэг нь юу вэ',
-                    'Давхрын муж нь J..AB дээр тогтмол, «Нийт» AC, «Нэгж үнэ» AD дээр зогсоно. '
-                    .'Блокийн давхар цөөн бол дунд нь ашиглагдаагүй багана үлдэнэ — хоосон '
-                    .'үлдээгээрэй, устгавал «Нэгж үнэ» гулсана.'],
-            ]],
-
-            ['Материалын төсөв — УЯН ХАТАН', [
-                ['Багануудыг нэрээр нь олдог',
-                    'Дунд нь багана нэмж болно. Харин баганын НЭРИЙГ өөрчилж болохгүй.'],
-                ['Нэгтгэсэн нүд ажиллана',
-                    'Ажлын нэрийг зөвхөн бүлгийн эхний мөрөнд бичиж болно — доорх материалууд '
-                    .'тэр ажилд автоматаар харьяалагдана (жишээ 1 ба 2-р мөрийг үз).'],
-                ['«Ажлын дэд нэр» багана',
-                    'Материалыг бүлэглэх шинж: «Арматур», «Бетон», «Хэв хашмал». Захиалагчийн '
-                    .'файлд энэ багана толгойгүй байдаг — тэр хэлбэрийг ч систем таньдаг.'],
-                ['«Нийт» нь давхруудын нийлбэртэй таарна',
-                    'Систем хоёрыг тулгана. 0.5%-иас их зөрвөл мөрийг татгалзана — энэ нь Excel-ийн '
-                    .'томьёо буруу муж заасныг барих зорилготой.'],
-            ]],
-
-            ['Ямар тохиолдолд мөр ТАТГАЛЗАГДАХ вэ', [
-                ['Хэмжих нэгж танигдахгүй',
-                    'Зөвхөн доорх жагсаалтаас. «куб», «кв.м» гэж бичвэл орохгүй — '
-                    .'920 м³ бетон 920 ширхэг болж захиалагдахаас сэргийлнэ.'],
-                ['Эвдэрсэн нүд', '#REF!, #DIV/0!, эсвэл тоон баганад текст орсон.'],
-                ['Код хоосон, эсвэл давхардсан', 'Код бол холбох цорын ганц түлхүүр.'],
-                ['Тоо хэмжээ огт алга', 'Бүх давхрын нүд хоосон бол тэр мөр төсөв биш.'],
-                ['Нэг муу нүд бүх импортыг сүйтгэхгүй',
-                    'Зөвхөн ТЭР МӨР унана. Батлахын өмнө алдаатай мөрүүдийн жагсаалтыг '
-                    .'шалтгаантай нь харуулна.'],
-            ]],
-
-            ['Татгалзахгүй, гэхдээ хоосон үлдэх', [
-                ['Нэгж үнэ',
-                    'Хоосон эсвэл 0 бол мөр ордог, үнэ нь хоосон үлдэнэ. Дараа нь системийн '
-                    .'«Орсон төсөв» хуудсан дээр гараар шивж болно.'],
-                ['Хяналтын инженер',
-                    'Нэр нь системийн хэрэглэгчтэй таарахгүй бол ажил үүснэ, шалгагч нь '
-                    .'хоосон үлдэнэ. Дараа нь хуваарилна.'],
-            ]],
-        ];
-
-        foreach ($sections as [$title, $items]) {
-            $w->row([[$title, XlsxWriter::HEADER], ['', XlsxWriter::HEADER]]);
-
-            foreach ($items as [$label, $text]) {
-                $w->row([[$label, XlsxWriter::LABEL], [$text, XlsxWriter::CELL]]);
-            }
-
-            $w->row();
-        }
-
-        $w->row([['ЗӨВШӨӨРӨГДӨХ ХЭМЖИХ НЭГЖ', XlsxWriter::HEADER], ['', XlsxWriter::HEADER]]);
-        $w->row([
-            [WorkBudgetImport::SHEET, XlsxWriter::LABEL],
-            [implode(' · ', WorkBudgetImport::UNITS), XlsxWriter::CELL],
-        ]);
-        $w->row([
-            [MaterialBudgetImport::SHEET, XlsxWriter::LABEL],
-            [implode(' · ', MaterialBudgetImport::UNITS), XlsxWriter::CELL],
-        ]);
-        $w->row();
-
-        $w->row([['ЭНЭ БЛОКИЙН ДАВХРУУД', XlsxWriter::HEADER], ['', XlsxWriter::HEADER]]);
-
-        foreach ($floors as $i => $name) {
-            $w->row([[($i + 1).'.', XlsxWriter::LABEL], [$name, XlsxWriter::CELL]]);
-        }
+        $w->widths([35, 100]);
+        $w->row([['ТӨСВИЙН ҮНЭ ОРУУЛАХ', XlsxWriter::TITLE]]);
+        $w->row(['Ажлын хөлсний төсөв', 'Барилгад үүссэн ажлууд бэлэн байна. Зөвхөн AD баганад нэгж үнийг бөглөнө.']);
+        $w->row(['Ажлын код', 'C баганын WT код, I баганын хэмжих нэгжийг өөрчлөхгүй. Нэрээр ойролцоолж тааруулахгүй.']);
+        $w->row(['Тоо хэмжээ', 'AC багана нь одоогийн хэмжээг харуулна. Импорт тоо хэмжээ, гүйцэтгэл, инженер, огноог өөрчлөхгүй.']);
+        $w->row(['Хоосон үнэ', 'Хоосон үнийг алгасана. 0 бол үнэгүй ажил гэсэн утгаар оруулна.']);
+        $w->row(['Ажил олдохгүй бол', 'Эхлээд загвараас эсвэл гараар тухайн барилгад ажил нэмнэ. Үнийн импорт шинэ ажил үүсгэхгүй.']);
+        $w->row(['Материалын төсөв', 'Тусдаа материалын төсвийн хуудас. Жишээ мөрүүдийг бодит өгөгдлөөр солино.']);
+        $w->row(['Давхардсан код', 'Ижил ажилд нэг удаа үнэ өгнө. Алдаатай мөр байвал файлыг засаад дахин оруулна.']);
     }
 }

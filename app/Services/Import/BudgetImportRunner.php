@@ -4,7 +4,6 @@ namespace App\Services\Import;
 
 use App\Models\Block;
 use App\Models\MaterialBudgetItem;
-use App\Models\User;
 use App\Models\WorkItem;
 use App\Models\WorkType;
 use App\Services\MaterialBudgetImport;
@@ -107,12 +106,12 @@ class BudgetImportRunner
         string $path,
         string $type,
         bool $prune = false,
-        string $mode = WorkBudgetWriter::MODE_REPLACE,
+        string $mode = 'prices',
     ): array {
         $report = $this->preview($block, $path, $type);
 
         if (! $report['canApply']) {
-            throw new RuntimeException('Оруулах зүйл алга — бичих юм байхгүй.');
+            throw new RuntimeException('Файлын алдаатай мөрийг засна уу, эсвэл оруулах нэгж үнийг бөглөнө үү.');
         }
 
         /*
@@ -123,7 +122,7 @@ class BudgetImportRunner
          */
         $report['result'] = $type === 'materials'
             ? app(MaterialBudgetWriter::class)->write($block, $report['plan'])
-            : app(WorkBudgetWriter::class)->write($block, $report['plan'], $prune, $mode);
+            : app(WorkPriceImport::class)->apply($block, $report['plan']);
 
         return $report;
     }
@@ -147,7 +146,7 @@ class BudgetImportRunner
         string $path,
         array $types,
         bool $prune = false,
-        string $mode = WorkBudgetWriter::MODE_REPLACE,
+        string $mode = 'prices',
     ): array {
         return array_map(
             fn ($type) => $this->apply($block, $path, $type, $prune, $mode),
@@ -297,148 +296,7 @@ class BudgetImportRunner
     /** @return array<string, mixed> */
     private function quantityReport(Block $block, XlsxReader $reader): array
     {
-        /*
-         * Дутуу байршлыг урьдчилан харахад ч үүсгэнэ.
-         *
-         * Транзакц буцдаг тул ул мөр үлдэхгүй, харин «техникийн давхар
-         * блокт алга» гэсэн худал алдаа гарахгүй: бодит бичилтэд тэр
-         * байршил үүсэх учиртай.
-         */
-        app(\App\Services\BlockLocationBuilder::class)->ensureStandardFloors($block);
-
-        $import = (new WorkBudgetImport($block))
-            ->parse($reader, $this->workTypesByCode(true), $this->inspectorsByBudgetName());
-
-        $plan = $import->plan();
-        $existing = WorkItem::where('block_id', $block->id)->count();
-
-        $withInspector = count(array_filter($plan, fn ($l) => $l['inspectorId'] !== null));
-        $named = count(array_filter($plan, fn ($l) => $l['inspector'] !== null));
-
-        $withPrice = array_filter($plan, fn ($l) => ($l['unitPrice'] ?? null) !== null);
-        $budget = array_sum(array_map(fn ($l) => $l['unitPrice'] * $l['quantity'], $withPrice));
-
-        $sections = [[
-            'title' => 'Хяналт шалгалт хийх инженер',
-            'rows' => [
-                ['label' => 'Инженер оноогдсон', 'value' => $withInspector, 'format' => 'count'],
-                ['label' => 'Нэр бий ч таарсангүй', 'value' => $named - $withInspector, 'format' => 'count'],
-                ['label' => 'Нэр БАЙХГҮЙ', 'value' => count($plan) - $named, 'format' => 'count',
-                 'note' => 'Эдгээр мөрийн гүйцэтгэл батлахыг хүлээхэд хэн рүү ч явахгүй.'],
-            ],
-        ], [
-            'title' => 'Төсвийн нэгж үнэ',
-            'rows' => [
-                ['label' => 'Үнэтэй мөр', 'value' => count($withPrice), 'format' => 'count'],
-                ['label' => 'Үнэгүй мөр', 'value' => count($plan) - count($withPrice), 'format' => 'count'],
-                ['label' => 'Нийт төсөв', 'value' => round($budget, 2), 'format' => 'money'],
-            ],
-        ]];
-
-        return $this->envelope($block, 'quantities', $plan, $import->errors(), [
-            'summary' => [
-                'sourceRows' => $import->sourceRowCount(),
-                'planned' => count($plan),
-                'rejected' => count($import->errors()),
-                'skipped' => 0,
-                'existing' => $existing,
-            ],
-            'sections' => $sections,
-            'warnings' => $this->quantityWarnings($block, $import, $plan),
-        ]);
-    }
-
-    /**
-     * @param  array<int, array<string, mixed>>  $plan
-     * @return array<int, array{level: string, title: string, items: array<int, string>}>
-     */
-    private function quantityWarnings(Block $block, WorkBudgetImport $import, array $plan): array
-    {
-        $warnings = [];
-
-        if ($import->missingLocations() !== []) {
-            $warnings[] = [
-                'level' => 'warn',
-                'title' => 'Төсөвт байгаа ч блокт БАЙХГҮЙ давхрууд',
-                'items' => [...$import->missingLocations(), 'Эдгээрийн тоо хэмжээ орохгүй.'],
-            ];
-        }
-
-        if ($import->unknownInspectors() !== []) {
-            $warnings[] = [
-                'level' => 'warn',
-                'title' => 'Таних боломжгүй хяналтын инженерийн нэр',
-                'items' => array_map(
-                    fn ($name, $rows) => "{$name} ({$rows} мөр)",
-                    array_keys($import->unknownInspectors()),
-                    $import->unknownInspectors(),
-                ),
-            ];
-        }
-
-        if ($import->sharedInspectors() !== []) {
-            $warnings[] = [
-                'level' => 'info',
-                'title' => 'Нэг нүдэнд хоёр инженер — ЗӨВХӨН ЭХНИЙХ оногдоно',
-                'items' => array_map(
-                    fn ($raw, $rows) => "{$raw} ({$rows} мөр)",
-                    array_keys($import->sharedInspectors()),
-                    $import->sharedInspectors(),
-                ),
-            ];
-        }
-
-        /*
-         * ГҮЙЦЭТГЭЛ УСТАНА — энэ бол хамгийн чухал анхааруулга.
-         *
-         * Тоо хэмжээ солигдоход хуучин явц утгагүй болно. Хэдэн бичлэг
-         * устахыг ТООГООР харуулна: «бага зэрэг өөрчлөлт» гэж бодоод
-         * хоёр сарын хэмжилт устгах нь бодит эрсдэл.
-         */
-        $itemIds = WorkItem::where('block_id', $block->id)->select('id');
-        $entries = \App\Models\ProgressEntry::whereIn('work_item_id', $itemIds)->count();
-        $inspections = \App\Models\Inspection::whereIn('work_item_id', $itemIds)->count();
-        $photos = \App\Models\Photo::whereIn('work_item_id', $itemIds)->count();
-
-        if ($entries + $inspections + $photos > 0) {
-            $warnings[] = [
-                'level' => 'danger',
-                'title' => 'ГҮЙЦЭТГЭЛ УСТАНА',
-                'items' => [
-                    "Явцын бичлэг: {$entries}",
-                    "Шалгалт: {$inspections}",
-                    "Зураг: {$photos}",
-                    'Тоо хэмжээ солигдоход хуучин явц утгагүй болдог тул цэвэрлэгдэнэ.',
-                ],
-            ];
-        }
-
-        $stale = $this->staleCount($block, $plan);
-
-        if ($stale > 0) {
-            $warnings[] = [
-                'level' => 'info',
-                'title' => "{$stale} ажлын мөр төсөвт ТААРААГҮЙ",
-                'items' => ['Эдгээр хэвээр үлдэнэ. Устгах бол «Таараагүй мөрийг устгах» сонголтыг асаана.'],
-            ];
-        }
-
-        return $warnings;
-    }
-
-    /** @param array<int, array<string, mixed>> $plan */
-    private function staleCount(Block $block, array $plan): int
-    {
-        if ($plan === []) {
-            return 0;
-        }
-
-        $keys = collect($plan)->map(fn ($l) => $l['locationId'].'|'.$l['workTypeId'])->flip();
-
-        return WorkItem::where('block_id', $block->id)
-            ->get(['location_id', 'work_type_id'])
-            ->reject(fn ($i) => $keys->has($i->location_id.'|'.$i->work_type_id))
-            ->count();
+        return app(WorkPriceImport::class)->report($block, $reader);
     }
 
     // ───────────────────────────── нийтлэг ─────────────────────────────
@@ -537,36 +395,4 @@ class BudgetImportRunner
         return $types;
     }
 
-    /**
-     * Төсвийн «Хяналт шалгалт хийх инженер» нэрийг хэрэглэгч рүү холбох хүснэгт.
-     *
-     * Холбоос нь `database/data/staff.json`-ийн `budgetName` талбарт
-     * ТОДОРХОЙ бичигдсэн — кодод овог хасаж таамаглахгүй.
-     *
-     * @return array<string, int>
-     */
-    private function inspectorsByBudgetName(): array
-    {
-        $path = database_path('data/staff.json');
-
-        if (! is_file($path)) {
-            return [];
-        }
-
-        $map = [];
-
-        foreach (json_decode((string) file_get_contents($path), true) ?? [] as $row) {
-            if (! isset($row['budgetName'], $row['email'])) {
-                continue;
-            }
-
-            $user = User::where('email', $row['email'])->first();
-
-            if ($user) {
-                $map[mb_strtolower($row['budgetName'])] = $user->id;
-            }
-        }
-
-        return $map;
-    }
 }

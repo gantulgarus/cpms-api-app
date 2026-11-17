@@ -2,7 +2,6 @@
 
 namespace App\Models;
 
-use App\Services\BlockLocationBuilder;
 
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
@@ -38,28 +37,11 @@ class BlockDesign extends Model
      */
     public function estimatedItems(): int
     {
-        /*
-         * Тоо нь `BlockLocationBuilder`-ийн үүсгэх байршилтай ЯГ таарах ёстой.
-         *
-         * Техникийн давхар нэмэгдэхэд энэ арифметик хоцорсон тул «загварын
-         * тооцоо 1,883, бодитоор 1,991» гэж зөрөөд, дэлгэц дээр хэрэглэгчид
-         * үүсэхээс бага тоо харуулж байв.
-         */
-        $floors = $this->floors + 2;                    // + зоорь + техникийн давхар
-
-        // Айлгүй барилгад техникийн давхрын зайнууд ч үүсэхгүй.
-        $units = $this->units_per_floor > 0
-            ? $this->floors * $this->units_per_floor + BlockLocationBuilder::technicalSpaceCount()
-            : 0;
-
         $items = $this->relationLoaded('items')
-            ? $this->items->loadMissing('workType')
-            : $this->items()->with('workType')->get();
+            ? $this->items->loadMissing('workType.catalogEntry')
+            : $this->items()->with('workType.catalogEntry')->get();
 
-        return $items->reduce(fn (int $sum, DesignItem $item) => $sum + match ($item->workType->level) {
-            'block' => 1,
-            'floor' => $floors,
-            default => $units,
-        }, 0);
+        return $items->reduce(fn (int $sum, DesignItem $item) => $sum
+            + app(\App\Services\DesignWorkLocations::class)->count($item->workType, $this), 0);
     }
 }

@@ -6,33 +6,11 @@ use App\Console\Concerns\RendersImportReport;
 use App\Models\Block;
 use App\Models\User;
 use App\Services\Import\BudgetImportRunner;
-use App\Services\Import\WorkBudgetWriter;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 use Throwable;
 
-/**
- * Төсвийн Excel-ээс тоо хэмжээг импортлох.
- *
- * ЯАГААД ХЭРЭГТЭЙ ВЭ: анхны ажлын мөрүүдийн тоо хэмжээ нь ТААМАГ. Барилгын
- * нийт дүнг давхрын тоонд хуваасан утга бөгөөд 31 ажилд буруу гарсан (чулуун
- * фасад 43 дахин их байв). Төсвийн файл давхар бүрийн тоог шууд өгдөг.
- *
- * ЭНЭ КОМАНД НЬ ЗӨВХӨН БҮРХҮҮЛ. Бодит ажлыг `BudgetImportRunner` хийнэ —
- * вэбийн импортын дэлгэц ч мөн тэр.
- *
- * АНХДАГЧААР ЮУ Ч БИЧИХГҮЙ. `--apply` тугтай үед л өөрчилнө. Урьдчилан
- * харах ба бичих нь ИЖИЛ кодоор явна, тиймээс харсан зүйл яг тэр хэвээрээ
- * орно — дутуу байршил үүсгэх зэрэг дайвар үйлдэл хүртэл тооцогдоно.
- *
- * ГҮЙЦЭТГЭЛ УСТАНА. Тоо хэмжээ өөрчлөгдөхөд хуучин явц утгагүй болно: 648 м²
- * гэж бодоод 600 мэдээлсэн ажил шинэ тоогоор 15 м² болвол 4000% гүйцэтгэлтэй
- * харагдана. Устгахын өмнө хэдэн бичлэг устахыг тоогоор харуулна.
- *
- * Хэрэглээ:
- *   php artisan cpms:import-quantities --file=/tmp/tosov.xlsx --block="А1 блок"
- *   php artisan cpms:import-quantities --file=/tmp/tosov.xlsx --block="А1 блок" --apply
- */
+/** Legacy command name; now imports unit prices only. */
 class ImportQuantities extends Command
 {
     use RendersImportReport;
@@ -41,12 +19,12 @@ class ImportQuantities extends Command
                             {--file= : Төсвийн .xlsx файлын зам}
                             {--block= : Блокийн нэр эсвэл id}
                             {--apply : Үнэхээр бичих (үгүй бол зөвхөн харуулна)}
-                            {--prune : Төсөвт байхгүй ажлыг устгах (зөвхөн replace горимд)}
-                            {--mode=replace : replace (гүйцэтгэл устана) эсвэл update (явц үлдэнэ)}
+                            {--prune : Дэмжигдэхгүй: ажлыг төсвөөр устгахгүй}
+                            {--mode=prices : Зөвхөн нэгж үнэ шинэчлэх}
                             {--force : Баталгаажуулалт асуухгүй}
                             {--errors=30 : Тайланд харуулах алдааны мөрийн тоо}';
 
-    protected $description = 'Төсвийн Excel-ээс ажлын тоо хэмжээг импортлоно';
+    protected $description = 'Төсвийн Excel-ээс байгаа ажлын нэгж үнийг шинэчилнэ';
 
     public function handle(): int
     {
@@ -61,14 +39,13 @@ class ImportQuantities extends Command
             return self::FAILURE;
         }
 
-        $this->warnAboutMissingStaff();
 
         $apply = (bool) $this->option('apply');
         $prune = (bool) $this->option('prune');
         $mode = (string) $this->option('mode');
 
-        if (! in_array($mode, WorkBudgetWriter::MODES, true)) {
-            $this->error('--mode нь `replace` эсвэл `update` байна.');
+        if ($mode !== 'prices' || $prune) {
+            $this->error('Зөвхөн --mode=prices дэмжинэ. --prune хэрэглэхгүй.');
 
             return self::FAILURE;
         }
@@ -81,21 +58,6 @@ class ImportQuantities extends Command
             $report = $runner->preview($block, $path, 'quantities');
 
             $this->renderReport($report);
-
-            if ($mode === WorkBudgetWriter::MODE_UPDATE) {
-                $this->newLine();
-                $this->info('ШИНЭЧЛЭХ горим: тоо хэмжээ, үнэ, инженер солигдоно. '
-                    .'Явц, шалгалт, зураг ҮЛДЭНЭ.');
-            }
-
-            if ($prune && $mode === WorkBudgetWriter::MODE_UPDATE) {
-                $this->newLine();
-                $this->warn('--prune нь шинэчлэх горимд ҮЙЛЧЛЭХГҮЙ — '
-                    .'гүйцэтгэлтэй ажил устах эрсдэлтэй.');
-            } elseif ($prune) {
-                $this->newLine();
-                $this->warn('--prune тугтай: төсөвт таараагүй ажлууд УСТАНА.');
-            }
 
             if (! $report['canApply']) {
                 $this->error('Оруулах мөр алга — бичих зүйлгүй.');

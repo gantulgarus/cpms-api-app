@@ -56,7 +56,7 @@ class ApplyBlockDesign implements ShouldQueue
     public function handle(): void
     {
         $block = Block::findOrFail($this->blockId);
-        $design = BlockDesign::with('items.workType.group')->findOrFail($this->designId);
+        $design = BlockDesign::with(['items.workType.group', 'items.workType.catalogEntry'])->findOrFail($this->designId);
 
         $this->report('running', 0, $design->estimatedItems());
 
@@ -114,7 +114,7 @@ class ApplyBlockDesign implements ShouldQueue
 
         foreach ($design->items as $item) {
             $level = $item->workType->level;
-            $targets = $locations[$level] ?? [];
+            $targets = app(\App\Services\DesignWorkLocations::class)->targets($item->workType, $locations);
 
             if ($targets === []) {
                 continue;   // жишээ нь айлгүй үйлчилгээний барилгад дотор засал

@@ -75,6 +75,10 @@ Route::prefix('v1')->group(function () {
         Route::post('contractors/{contractor}/access-code', [ContractorController::class, 'issueAccessCode']);
         Route::delete('contractors/{contractor}/access-code', [ContractorController::class, 'revokeAccessCode']);
 
+        Route::get('work-catalog', [\App\Http\Controllers\Api\WorkCatalogController::class, 'index']);
+        Route::patch('work-catalog/{workCatalogEntry}', [\App\Http\Controllers\Api\WorkCatalogController::class, 'update']);
+        Route::delete('work-catalog/{workCatalogEntry}', [\App\Http\Controllers\Api\WorkCatalogController::class, 'destroy']);
+
         // --- Төсөл ---
         Route::get('companies', [ProjectController::class, 'companies']);
         Route::get('projects', [ProjectController::class, 'index']);
