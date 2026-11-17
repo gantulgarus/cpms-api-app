@@ -165,7 +165,9 @@ class WorkItemPlanController extends Controller
             'workTypeIds' => ['nullable', 'array', 'min:1'],
             'workTypeIds.*' => ['uuid', 'exists:work_types,id'],
             'plannedQty' => ['nullable', 'numeric', 'min:0'],
-            'locationId' => ['nullable', 'uuid', 'exists:locations,id'],
+            'locationId' => ['nullable', 'uuid', Rule::exists('locations', 'id')->where('block_id', $block->id), 'prohibits:locationIds'],
+            'locationIds' => ['sometimes', 'required', 'array', 'min:1'],
+            'locationIds.*' => ['required', 'uuid', 'distinct', Rule::exists('locations', 'id')->where('block_id', $block->id)],
             'contractorId' => ['nullable', 'uuid', 'exists:contractors,id'],
             'plannedStartDate' => ['nullable', 'date'],
             'plannedEndDate' => ['nullable', 'date', 'after_or_equal:plannedStartDate'],
@@ -187,11 +189,9 @@ class WorkItemPlanController extends Controller
         DB::transaction(function () use ($block, $workTypes, $validated, $takt, &$created, &$skipped) {
             foreach ($workTypes as $workType) {
                 $targets = $block->locations()
-                    ->when(
-                        ! empty($validated['locationId']),
-                        fn ($q) => $q->where('id', $validated['locationId']),
-                        fn ($q) => $q->where('level', $workType->level),
-                    )
+                    ->where('level', $workType->level)
+                    ->when(isset($validated['locationIds']), fn ($q) => $q->whereIn('id', $validated['locationIds']))
+                    ->when(! empty($validated['locationId']), fn ($q) => $q->where('id', $validated['locationId']))
                     ->orderBy('sequence_number')
                     ->with('parent')
                     ->get();

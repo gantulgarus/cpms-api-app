@@ -15,14 +15,15 @@ class ConfigureCatalogWork
         return DB::transaction(function () use ($entry, $input) {
             $entry = WorkCatalogEntry::lockForUpdate()->findOrFail($entry->id);
             $type = $entry->workType;
-            foreach (['name', 'unit', 'description'] as $field) {
+            foreach (['group_name', 'subgroup_number', 'type_name', 'location_description', 'floor_description', 'name', 'unit', 'description'] as $field) {
                 if (array_key_exists($field, $input)) {
                     $value = trim((string) $input[$field]);
                     if ($field === 'unit' && $value === '0') $value = '';
-                    abort_if($field === 'name' && $value === '', 422, 'Нэр заавал.');
+                    abort_if(in_array($field, ['name', 'group_name', 'subgroup_number', 'type_name'], true) && $value === '', 422, 'Нэр заавал.');
                     $entry->{$field} = $value === '' ? null : $value;
                 }
             }
+            if (array_key_exists('sequence_number', $input)) $entry->sequence_number = (int) $input['sequence_number'];
             $inferred = app(InferWorkLocation::class)->infer($entry);
             $inUse = $type && $type->workItems()->exists();
             if (array_key_exists('level', $input)) {

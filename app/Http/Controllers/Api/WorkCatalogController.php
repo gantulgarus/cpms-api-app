@@ -46,15 +46,48 @@ class WorkCatalogController
             ->map(fn ($entry) => $entry->toCatalogArray())->values()]);
     }
 
+    public function store(Request $request): JsonResponse
+    {
+        abort_unless($request->user()?->canManageReferenceData(), 403, 'Танд лавлах сан засах эрх байхгүй.');
+        $request->validate([
+            'groupName' => ['required', 'string', 'max:255'],
+            'subgroupNumber' => ['required', 'string', 'max:50'],
+            'typeName' => ['required', 'string', 'max:255'],
+            'name' => ['required', 'string', 'max:255'],
+            'sequenceNumber' => ['required', 'integer', 'min:1', 'max:2147483647'],
+        ]);
+        return DB::transaction(function () use ($request) {
+            $entry = WorkCatalogEntry::create([
+                'group_name' => $request->input('groupName'),
+                'subgroup_number' => $request->input('subgroupNumber'),
+                'type_name' => $request->input('typeName'),
+                'name' => $request->input('name'),
+                'sequence_number' => $request->input('sequenceNumber'),
+            ]);
+            $response = $this->update($request, $entry);
+            $response->setStatusCode(201);
+            return $response;
+        });
+    }
+
     public function update(Request $request, WorkCatalogEntry $workCatalogEntry): JsonResponse
     {
         abort_unless($request->user()?->canManageReferenceData(), 403, 'Танд лавлах сан засах эрх байхгүй.');
         $validated = $request->validate([
+            'groupName' => ['sometimes', 'required', 'string', 'max:255'],
+            'subgroupNumber' => ['sometimes', 'required', 'string', 'max:50'],
+            'typeName' => ['sometimes', 'required', 'string', 'max:255'],
+            'locationDescription' => ['nullable', 'string', 'max:5000'],
+            'floorDescription' => ['nullable', 'string', 'max:5000'],
+            'sequenceNumber' => ['sometimes', 'required', 'integer', 'min:1', 'max:2147483647'],
             'name' => ['sometimes', 'required', 'string', 'max:255'],
             'unit' => ['nullable', 'string', 'max:20'],
             'description' => ['nullable', 'string', 'max:5000'],
             'level' => ['nullable', Rule::in(WorkType::LEVELS)],
         ]);
+        foreach (['groupName' => 'group_name', 'subgroupNumber' => 'subgroup_number', 'typeName' => 'type_name', 'locationDescription' => 'location_description', 'floorDescription' => 'floor_description', 'sequenceNumber' => 'sequence_number'] as $key => $column) {
+            if (array_key_exists($key, $validated)) $validated[$column] = $validated[$key];
+        }
         $workCatalogEntry = app(ConfigureCatalogWork::class)->update($workCatalogEntry, $validated);
         return response()->json(['data' => $workCatalogEntry->toCatalogArray()]);
     }
