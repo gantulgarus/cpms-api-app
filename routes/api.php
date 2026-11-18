@@ -128,6 +128,9 @@ Route::prefix('v1')->group(function () {
 
             Route::get('blocks/{block}/deletion-impact', [BlockController::class, 'deletionImpact']);
             Route::delete('blocks/{block}', [BlockController::class, 'destroy']);
+            Route::get('blocks/{block}/execution-plan', [\App\Http\Controllers\Api\WorkExecutionPlanController::class, 'index']);
+            Route::post('blocks/{block}/execution-plan/move', [\App\Http\Controllers\Api\WorkExecutionPlanController::class, 'move']);
+            Route::post('blocks/{block}/execution-plan/dependencies', [\App\Http\Controllers\Api\WorkExecutionPlanController::class, 'dependencies']);
             Route::get('blocks/{block}/work-items', [WorkItemController::class, 'index']);
             Route::get('blocks/{block}/summary', [WorkItemController::class, 'summary']);
 

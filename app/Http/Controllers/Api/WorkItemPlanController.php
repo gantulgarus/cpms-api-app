@@ -222,7 +222,8 @@ class WorkItemPlanController extends Controller
 
         abort_if($ids === [], 422, 'Ажлын төрөл сонгоно уу.');
 
-        $workTypes = WorkType::whereIn('id', $ids)->with(['group', 'catalogEntry'])->get();
+        $workTypes = WorkType::whereIn('id', $ids)->with(['group', 'catalogEntry'])->get()
+            ->sortBy(fn ($type) => array_search($type->id, $ids, true))->values();
         $created = 0;
         $skipped = [];
 
@@ -232,6 +233,8 @@ class WorkItemPlanController extends Controller
         $takt = TaktSchedule::forBlock($block, $validated['plannedStartDate'] ?? null);
 
         DB::transaction(function () use ($block, $workTypes, $validated, $takt, &$created, &$skipped) {
+            Block::whereKey($block->id)->lockForUpdate()->firstOrFail();
+            $planOrder = app(\App\Services\WorkExecutionPlan::class)->appendFrom($block);
             foreach ($workTypes as $workType) {
                 $targets = $block->locations()
                     ->where('level', $workType->level)
@@ -277,6 +280,7 @@ class WorkItemPlanController extends Controller
                     );
 
                     $block->workItems()->create([
+                        'plan_order' => ++$planOrder,
                         'location_id' => $location->id,
                         'work_type_id' => $workType->id,
                         'contractor_id' => $validated['contractorId'] ?? null,
@@ -292,33 +296,14 @@ class WorkItemPlanController extends Controller
 
                 $created += $fresh->count();
             }
+            if ($created === 0) {
+                $noLocation = collect($skipped)->every(fn ($row) => $row['reason'] === self::NO_LOCATION);
+                abort($noLocation ? 422 : 409, $noLocation
+                    ? 'Сонгосон ажлын төрөлд тохирох байршил блокт байхгүй.'
+                    : 'Сонгосон ажлууд аль хэдийн нэмэгдсэн.');
+            }
         });
 
-        /*
-         * Бүгд алгасагдвал хэрэглэгчид ямар нэг зүйл болсон мэт харагдах ёсгүй.
-         *
-         * Хоёр шалтгааныг ЯЛГАНА:
-         *
-         *   · байршил алга  → 422, хүсэлт нь өөрөө утгагүй. Айлгүй
-         *     үйлчилгээний барилгад айлын ажил нэмэх нь дахин оролдоод
-         *     өөрчлөгдөхгүй — хэрэглэгч өөр ажлын төрөл сонгох ёстой.
-         *   · аль хэдийн нэмэгдсэн → 409, бодит зөрчил.
-         *
-         * Урьд нь хоёулаа 409 байсан тул «яагаад болохгүй байгаа» нь
-         * статусаас уншигдахгүй, зөвхөн текстээс таамаглах байсан.
-         */
-        if ($created === 0) {
-            $noLocation = collect($skipped)->every(
-                fn ($row) => $row['reason'] === self::NO_LOCATION
-            );
-
-            abort(
-                $noLocation ? 422 : 409,
-                $noLocation
-                    ? 'Сонгосон ажлын төрөлд тохирох байршил блокт байхгүй.'
-                    : 'Сонгосон ажлууд аль хэдийн нэмэгдсэн.'
-            );
-        }
 
         return response()->json([
             'data' => ['created' => $created, 'skipped' => $skipped],

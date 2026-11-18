@@ -49,7 +49,7 @@ class WorkItem extends Model
 
     protected $fillable = [
         'block_id', 'location_id', 'work_type_id', 'contractor_id', 'inspector_id',
-        'code', 'name', 'unit',
+        'code', 'name', 'unit', 'plan_order',
         'planned_qty', 'budget_unit_price',
         'reported_qty', 'checked_qty', 'accepted_qty',
         'planned_start_date', 'planned_end_date', 'baseline_end_date',
@@ -65,6 +65,7 @@ class WorkItem extends Model
             'reported_qty' => 'decimal:3',
             'checked_qty' => 'decimal:3',
             'accepted_qty' => 'decimal:3',
+            'plan_order' => 'integer',
             'schedule_manual' => 'boolean',
             'actual_start_date' => 'date',
             'actual_end_date' => 'date',

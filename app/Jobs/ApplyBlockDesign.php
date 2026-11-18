@@ -62,6 +62,7 @@ class ApplyBlockDesign implements ShouldQueue
 
         try {
             DB::transaction(function () use ($block, $design) {
+                Block::whereKey($block->id)->lockForUpdate()->firstOrFail();
                 // Байршил аль хэдийн байвал ДАХИН үүсэхгүй — загваргүй блок
                 // үүсгээд дараа нь загвар буулгах үед давхардахаас сэргийлнэ.
                 $locations = app(BlockLocationBuilder::class)
@@ -108,6 +109,7 @@ class ApplyBlockDesign implements ShouldQueue
             $block->takt_days ?: TaktSchedule::DEFAULT_TAKT_DAYS,
             max($design->floors, 1),
         );
+        $planOrder = app(\App\Services\WorkExecutionPlan::class)->appendFrom($block);
         $buffer = [];
         $inserted = 0;
         $total = $design->estimatedItems();
@@ -123,7 +125,9 @@ class ApplyBlockDesign implements ShouldQueue
             $order = $item->workType->group?->build_order ?? 5;
 
             foreach ($targets as $location) {
-                $buffer[] = $this->workItemRow($block, $item, $location, $order, $now, $takt, $level);
+                $row = $this->workItemRow($block, $item, $location, $order, $now, $takt, $level);
+                $row['plan_order'] = ++$planOrder;
+                $buffer[] = $row;
 
                 if (count($buffer) >= self::CHUNK) {
                     DB::table('work_items')->insert($buffer);
