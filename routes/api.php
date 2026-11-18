@@ -133,6 +133,7 @@ Route::prefix('v1')->group(function () {
 
             // --- Төлөвлөгөөт тоо хэмжээ гүйцээх ---
             Route::get('blocks/{block}/missing-quantities', [WorkItemPlanController::class, 'missingQuantities']);
+            Route::post('blocks/{block}/work-items/set-dates', [WorkItemPlanController::class, 'setDates']);
             Route::post('blocks/{block}/work-items/set-quantity', [WorkItemPlanController::class, 'setQuantity']);
 
             // --- Хариуцагч оноох ---
@@ -274,6 +275,7 @@ Route::prefix('v1')->group(function () {
         // --- Ажлын нэгж --- (мөн хамрах хүрээгээр хамгаалагдана)
         Route::middleware(EnsureWorkScope::class)->group(function () {
             Route::get('work-items/{workItem}', [WorkItemController::class, 'show']);
+            Route::patch('work-items/{workItem}/actual-dates', [WorkItemPlanController::class, 'actualDates']);
             Route::patch('work-items/{workItem}', [WorkItemPlanController::class, 'update']);
             Route::patch('work-items/{workItem}/contractor', [WorkItemAssignmentController::class, 'assignOne']);
             Route::patch('work-items/{workItem}/inspector', [WorkItemAssignmentController::class, 'assignInspector']);

@@ -216,6 +216,9 @@ class BlockReport
     {
         $row = DB::table('work_items')
             ->where('block_id', $block->id)
+            ->selectRaw('sum(case when actual_start_date is not null then 1 else 0 end) as actual_started')
+            ->selectRaw('sum(case when actual_end_date is not null then 1 else 0 end) as actual_finished')
+            ->selectRaw('sum(case when actual_end_date > planned_end_date then 1 else 0 end) as actual_late')
             ->selectRaw('min(planned_start_date) as first_start')
             ->selectRaw('max(planned_end_date) as last_end')
             ->selectRaw('max(baseline_end_date) as baseline_end')
@@ -243,6 +246,9 @@ class BlockReport
             ->first();
 
         return [
+            'actualStartedItems' => (int) ($row->actual_started ?? 0),
+            'actualFinishedItems' => (int) ($row->actual_finished ?? 0),
+            'actualLateItems' => (int) ($row->actual_late ?? 0),
             'plannedStart' => $row->first_start,
             'plannedEnd' => $row->last_end,
 

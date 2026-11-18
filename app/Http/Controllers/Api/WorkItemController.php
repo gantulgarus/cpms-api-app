@@ -39,8 +39,17 @@ class WorkItemController extends Controller
         // Eloquent\Builder хүлээдэг. Тиймээс query-г шууд үүсгэнэ.
         $query = WorkItem::query()
             ->where('block_id', $block->id)
-            ->with(['location', 'workType.group', 'contractor', 'inspector'])
-            ->orderBy('name');
+            ->with(['location', 'workType.group', 'contractor', 'inspector']);
+
+        if ($request->query('sort') === 'workCode') {
+            // WT codes are generated from the numeric catalog identity. Sort before pagination.
+            $query->select('work_items.*')->selectSub(\App\Models\WorkCatalogEntry::query()
+                ->select('id')->whereColumn('work_type_id', 'work_items.work_type_id')->limit(1), 'catalog_sort_id')
+                ->orderByRaw('catalog_sort_id IS NULL')->orderBy('catalog_sort_id')
+                ->orderBy('work_type_id')->orderBy('location_id')->orderBy('work_items.id');
+        } else {
+            $query->orderBy('name');
+        }
 
         $this->filter->apply($query, $request);
 
@@ -118,6 +127,9 @@ class WorkItemController extends Controller
         $entry = DB::transaction(function () use ($request, $workItem) {
             $locked = WorkItem::lockForUpdate()->find($workItem->id);
 
+            if ($request->has('actualStartDate') || $request->has('actualEndDate')) {
+                app(\App\Services\WorkDates::class)->actual($locked, $request->validated('actualStartDate') ?? $locked->actual_start_date?->toDateString(), $request->validated('actualEndDate'), (float) $request->validated('completedQty'));
+            }
             $entry = $locked->progressEntries()->create([
                 'reported_by_id' => $request->user()?->id,
                 'contractor_id' => $locked->contractor_id,

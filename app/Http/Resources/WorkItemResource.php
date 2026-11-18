@@ -44,6 +44,13 @@ class WorkItemResource extends JsonResource
             'remainingQty' => $this->remaining_qty,
             'percentage' => $this->percentage,
 
+            'scheduleManual' => (bool) $this->schedule_manual,
+            'actualStartDate' => $this->actual_start_date?->toDateString(),
+            'actualEndDate' => $this->actual_end_date?->toDateString(),
+            'approvedCompletedAt' => $this->approved_completed_at?->toIso8601String(),
+            'actualDurationDays' => $this->actual_start_date && $this->actual_end_date ? (int) $this->actual_start_date->diffInDays($this->actual_end_date) + 1 : null,
+            'completionDelayDays' => $this->actual_end_date && $this->planned_end_date ? max(0, (int) $this->planned_end_date->diffInDays($this->actual_end_date, false)) : null,
+            'actualStartSuggestion' => $this->when((bool) $this->resource->getAttribute('with_hold_point'), function () { if ($this->actual_start_date) return $this->actual_start_date->toDateString(); $first = $this->progressEntries()->min('recorded_at'); return $first ? \Illuminate\Support\Carbon::parse($first, config('app.timezone'))->setTimezone('Asia/Ulaanbaatar')->toDateString() : null; }),
             'plannedStartDate' => $this->planned_start_date?->toDateString(),
             'plannedEndDate' => $this->planned_end_date?->toDateString(),
             'status' => $this->status,

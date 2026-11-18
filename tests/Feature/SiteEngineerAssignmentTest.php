@@ -79,6 +79,21 @@ class SiteEngineerAssignmentTest extends TestCase
         return $this->postJson("/api/v1/work-items/{$item->id}/inspections", ['stage' => Inspection::STAGE_SITE, 'result' => 'accepted', 'acceptedQty' => 10]);
     }
 
+    public function test_work_code_order_is_applied_before_pagination(): void
+    {
+        foreach ([$this->second, $this->first] as $item) {
+            $entry = \App\Models\WorkCatalogEntry::create(['group_name' => $item->workType->group->name, 'subgroup_number' => '1.1', 'type_name' => 'Төрөл',
+                'name' => $item->workType->name, 'unit' => 'м2', 'sequence_number' => 1]);
+            $entry->work_type_id = $item->work_type_id;
+            $entry->save();
+        }
+        $legacy = $this->makeWork('А үсгээр эхлэх кодгүй ажил');
+        $url = "/api/v1/blocks/{$this->block->id}/work-items?sort=workCode&pageSize=1";
+        $this->getJson($url)->assertOk()->assertJsonPath('meta.total', 3)->assertJsonPath('data.0.id', $this->second->id);
+        $this->getJson($url.'&page=2')->assertOk()->assertJsonPath('data.0.id', $this->first->id);
+        $this->getJson($url.'&page=3')->assertOk()->assertJsonPath('data.0.id', $legacy->id);
+    }
+
     public function test_subgroups_have_independent_engineers_and_override_group_fallback(): void
     {
         $typeA = $this->first->workType;

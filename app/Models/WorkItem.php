@@ -53,6 +53,7 @@ class WorkItem extends Model
         'planned_qty', 'budget_unit_price',
         'reported_qty', 'checked_qty', 'accepted_qty',
         'planned_start_date', 'planned_end_date', 'baseline_end_date',
+        'schedule_manual', 'actual_start_date', 'actual_end_date', 'approved_completed_at',
         'status', 'review_state', 'rework_of_id',
     ];
 
@@ -64,6 +65,10 @@ class WorkItem extends Model
             'reported_qty' => 'decimal:3',
             'checked_qty' => 'decimal:3',
             'accepted_qty' => 'decimal:3',
+            'schedule_manual' => 'boolean',
+            'actual_start_date' => 'date',
+            'actual_end_date' => 'date',
+            'approved_completed_at' => 'datetime',
             'planned_start_date' => 'date',
             'planned_end_date' => 'date',
             'baseline_end_date' => 'date',
@@ -338,10 +343,14 @@ class WorkItem extends Model
 
         $this->status = match (true) {
             $this->accepted_qty >= $planned && $planned > 0 => 'completed',
-            $reportedGross > 0 => 'in_progress',
+            $reportedGross > 0 || $this->actual_start_date => 'in_progress',
             default => 'not_started',
         };
 
+        $this->approved_completed_at = $this->status === 'completed'
+            ? $this->inspections()->where('stage', Inspection::STAGE_FINAL)->where('accepted_qty', '>', 0)->max('inspected_at') : null;
+        // A rejected/reopened quantity means the physical work is no longer complete.
+        if ((float) $this->reported_qty + self::EPSILON < $planned) $this->actual_end_date = null;
         $this->review_state = $this->resolveReviewState();
 
         $this->save();

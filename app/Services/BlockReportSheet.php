@@ -89,6 +89,9 @@ class BlockReportSheet
             ['Гулсалт (хоног)', $s['slippageDays']],
             ['Сунгагдсан ажил', $s['extendedItems']],
             ['Хугацаа хэтэрсэн ажил', $s['overdueItems']],
+            ['Бодит эхэлсэн огноотой ажил', $s['actualStartedItems']],
+            ['Бодит дууссан огноотой ажил', $s['actualFinishedItems']],
+            ['Хоцорч дууссан ажил', $s['actualLateItems']],
         ]);
 
         $q = $report['quality'];

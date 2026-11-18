@@ -101,7 +101,7 @@ class ExtensionService
              * ЗӨВХӨН `planned_end_date` хөдөлнө. `baseline_end_date` хэвээр —
              * тэр нь гулсалтыг хэмжих цорын гагц тогтмол цэг.
              */
-            $item->update(['planned_end_date' => $request->requested_end_date->toDateString()]);
+            $item->update(['schedule_manual' => true, 'planned_end_date' => $request->requested_end_date->toDateString()]);
 
             // Батлагдсан сунгалт нь сааталд бүртгэгдэнэ — хоцролтын шалтгаан
             // нэг дор хуримтлагдах ёстой.

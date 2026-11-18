@@ -41,6 +41,8 @@ class StoreProgressRequest extends FormRequest
     public function rules(): array
     {
         return [
+            'actualStartDate' => ['sometimes', 'required', 'date_format:Y-m-d', 'before_or_equal:'.now('Asia/Ulaanbaatar')->toDateString()],
+            'actualEndDate' => ['sometimes', 'nullable', 'date_format:Y-m-d', 'before_or_equal:'.now('Asia/Ulaanbaatar')->toDateString()],
             'completedQty' => ['required', 'numeric', 'gt:0'],
             'workersCount' => ['nullable', 'integer', 'min:0', 'max:999'],
             'remarks' => ['nullable', 'string', 'max:2000'],

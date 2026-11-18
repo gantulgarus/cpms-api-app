@@ -45,26 +45,71 @@ class WorkItemPlanController extends Controller
 
         $validated = $request->validate([
             'plannedQty' => ['sometimes', 'numeric', 'min:0'],
-            'plannedStartDate' => ['nullable', 'date'],
-            'plannedEndDate' => ['nullable', 'date', 'after_or_equal:plannedStartDate'],
+            'plannedStartDate' => ['sometimes', 'required', 'date_format:Y-m-d'],
+            'plannedEndDate' => ['sometimes', 'required', 'date_format:Y-m-d'],
         ]);
 
-        if (isset($validated['plannedQty'])) {
-            $this->guardNotBelowAccepted($workItem, (float) $validated['plannedQty']);
-        }
-
-        $workItem->update(array_filter([
-            'planned_qty' => $validated['plannedQty'] ?? null,
-            'planned_start_date' => $validated['plannedStartDate'] ?? null,
-            'planned_end_date' => $validated['plannedEndDate'] ?? null,
-        ], fn ($v) => $v !== null));
-
-        // Тоо хэмжээ өөрчлөгдвөл төлөв, хувь бүгд өөр болно.
-        $workItem->recalculate();
+        DB::transaction(function () use ($workItem, $validated) {
+            $item = WorkItem::lockForUpdate()->findOrFail($workItem->id);
+            if (isset($validated['plannedQty'])) {
+                $this->guardNotBelowAccepted($item, (float) $validated['plannedQty']);
+                $item->planned_qty = $validated['plannedQty'];
+                $item->save();
+            }
+            if (isset($validated['plannedStartDate']) || isset($validated['plannedEndDate'])) {
+                $start = $validated['plannedStartDate'] ?? $item->planned_start_date?->toDateString();
+                $end = $validated['plannedEndDate'] ?? $item->planned_end_date?->toDateString();
+                abort_unless($start && $end, 422, 'Эхлэх, дуусах огноог хоёуланг оруулна уу.');
+                app(\App\Services\WorkDates::class)->plan($item, $start, $end);
+            }
+            $item->recalculate();
+        });
 
         return response()->json([
             'data' => new WorkItemResource($workItem->refresh()->load(['location', 'workType.group', 'contractor'])),
         ]);
+    }
+
+    public function setDates(Request $request, Block $block): JsonResponse
+    {
+        $this->authorizeEdit($request);
+        $input = $request->validate([
+            'workTypeId' => ['required', 'uuid', 'exists:work_types,id'],
+            'locationIds' => ['required', 'array', 'min:1'],
+            'locationIds.*' => ['required', 'uuid', 'distinct', Rule::exists('locations', 'id')->where('block_id', $block->id)],
+            'plannedStartDate' => ['required', 'date_format:Y-m-d'],
+            'plannedEndDate' => ['required', 'date_format:Y-m-d', 'after_or_equal:plannedStartDate'],
+            'overwriteManual' => ['sometimes', 'boolean'],
+        ]);
+        $result = DB::transaction(function () use ($block, $input) {
+            $items = $block->workItems()->where('work_type_id', $input['workTypeId'])->whereIn('location_id', $input['locationIds'])->lockForUpdate()->get();
+            abort_if($items->isEmpty(), 422, 'Сонгосон байршилд энэ ажил алга.');
+            $updated = 0; $skipped = 0;
+            foreach ($items as $item) {
+                if ($item->accepted_qty > 0 || ($item->schedule_manual && ! ($input['overwriteManual'] ?? false))) { $skipped++; continue; }
+                app(\App\Services\WorkDates::class)->plan($item, $input['plannedStartDate'], $input['plannedEndDate']);
+                $updated++;
+            }
+            return compact('updated', 'skipped');
+        });
+        return response()->json(['data' => $result]);
+    }
+
+    public function actualDates(Request $request, WorkItem $workItem): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless($user?->canEditPlan() || $user?->canReportProgress(), 403, 'Танд бодит огноо бүртгэх эрх байхгүй.');
+        if ($user->isContractorRep()) abort_unless($workItem->contractor_id === $user->contractor_id, 403);
+        $input = $request->validate([
+            'actualStartDate' => ['present', 'nullable', 'date_format:Y-m-d', 'before_or_equal:'.now('Asia/Ulaanbaatar')->toDateString()],
+            'actualEndDate' => ['present', 'nullable', 'date_format:Y-m-d', 'before_or_equal:'.now('Asia/Ulaanbaatar')->toDateString()],
+        ]);
+        DB::transaction(function () use ($workItem, $input) {
+            $item = WorkItem::lockForUpdate()->findOrFail($workItem->id);
+            app(\App\Services\WorkDates::class)->actual($item, $input['actualStartDate'], $input['actualEndDate']);
+            $item->recalculate();
+        });
+        return response()->json(['data' => new WorkItemResource($workItem->fresh()->load(['location', 'workType.group', 'contractor', 'inspector']))]);
     }
 
     /**
@@ -396,21 +441,17 @@ class WorkItemPlanController extends Controller
             'startDate.date' => 'Эхлэх огноо буруу байна.',
         ]);
 
-        $block->update([
-            'takt_days' => $validated['taktDays'],
-            'start_date' => $validated['startDate'] ?? $block->start_date,
-        ]);
-
-        $takt = TaktSchedule::forBlock($block->fresh());
+        $takt = new TaktSchedule($validated['startDate'] ?? $block->start_date?->toDateString() ?? now()->toDateString(), $validated['taktDays'], max((int) $block->floors, 1));
         $updated = 0;
         $frozen = 0;
 
-        DB::transaction(function () use ($block, $takt, &$updated, &$frozen) {
+        DB::transaction(function () use ($block, $takt, $validated, &$updated, &$frozen) {
+            $block->update(['takt_days' => $validated['taktDays'], 'start_date' => $validated['startDate'] ?? $block->start_date]);
             $block->workItems()
-                ->with(['location', 'workType.group'])
+                ->with(['location', 'workType.group'])->withExists('progressEntries')
                 ->chunkById(500, function ($items) use ($takt, &$updated, &$frozen) {
                     foreach ($items as $item) {
-                        if ($item->accepted_qty > 0) {
+                        if ($item->accepted_qty > 0 || $item->schedule_manual || $item->actual_start_date || $item->reported_qty > 0 || $item->progress_entries_exists) {
                             $frozen++;
 
                             continue;
